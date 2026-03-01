@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "../lib/db/schema";
 
 async function seed() {
@@ -10,8 +10,8 @@ async function seed() {
     return;
   }
 
-  const sql = neon(DATABASE_URL);
-  const db = drizzle(sql, { schema });
+  const client = postgres(DATABASE_URL);
+  const db = drizzle(client, { schema });
 
   console.log("🌱 Seeding database...\n");
 
@@ -230,6 +230,8 @@ async function seed() {
   console.log("\n🎉 Seed complete!");
   console.log(`\n📋 Company ID: ${company.id}`);
   console.log(`   Use this ID in chat URL: /chat/${company.id}`);
+
+  await client.end();
 }
 
 function printSeedData() {

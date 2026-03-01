@@ -1,5 +1,5 @@
-import { neon } from "@neondatabase/serverless";
-import { drizzle } from "drizzle-orm/neon-http";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
 function createDb() {
@@ -9,8 +9,8 @@ function createDb() {
       "DATABASE_URL is not set. Please set it in your .env file."
     );
   }
-  const sql = neon(url);
-  return drizzle(sql, { schema });
+  const client = postgres(url);
+  return drizzle(client, { schema });
 }
 
 // Lazy initialization to avoid build-time errors
