@@ -1,0 +1,266 @@
+# DealFlow AI
+
+> Multi-agent AI platform for autonomous business development — qualifies leads, answers product questions via RAG, negotiates deals, and books meetings, all with human-in-the-loop approval for high-stakes actions.
+
+Built to demonstrate all 7 modules of advanced agentic AI architecture: messaging & webhooks, state management & concurrency, advanced tool calling, memory systems, multi-agent orchestration, guardrails (trust layer), and evaluation.
+
+## Architecture
+
+```
+Prospect (Chat Widget)  →  /api/chat  →  Guardrails (Pre)  →  Supervisor Agent
+                                                                    ↓
+                                             ┌────────────┬────────────┬────────────┐
+                                        QualifierAgent  DealAgent  SchedulerAgent  KnowledgeAgent
+                                             └────────────┴────────────┴────────────┘
+                                                                    ↓
+                                                          Guardrails (Post)  →  Response
+                                                                    ↓
+                                                      Background: Memory Extraction
+```
+
+### The 4 Agents
+
+| Agent | Purpose | Tools | HITL? |
+|-------|---------|-------|-------|
+| **QualifierAgent** | BANT-based lead qualification | `scoreLeadFit`, `getCompanyInfo`, `tagLead` | No |
+| **KnowledgeAgent** | RAG over product docs & FAQs | `searchKnowledgeBase`, `getCaseStudy` | No |
+| **DealAgent** | Pricing, negotiation, proposals | `getPricing`, `draftProposal`, `applyDiscount` | Yes — proposals always, discounts >10% |
+| **SchedulerAgent** | Demo & meeting booking | `checkAvailability`, `bookMeeting` | Yes — always |
+
+### How the 7 Modules Map
+
+| Module | Implementation |
+|--------|---------------|
+| **1. Messaging & Webhooks** | `/api/webhooks/[platform]` — accepts webhooks, returns 200 immediately, queues for background processing via Inngest |
+| **2. State Management** | Conversation `status` (idle/processing/cancelled) + `activeJobId` with AbortController for interrupt/kill/restart |
+| **3. Tool Calling** | ~12 tools with Zod schemas across 4 agents + MCP server with tools & resources |
+| **4. Memory** | Extract facts → embed → store in pgvector → semantic retrieval → inject into context. LLM judge for contradiction resolution |
+| **5. Multi-Agent** | Supervisor classifies intent via structured output → routes to sub-agent. Conditional re-routing (qualifier → deal for hot leads) |
+| **6. Guardrails** | 3-layer pipeline: deterministic regex → semantic similarity (pgvector) → LLM post-check. TransformStream guard for real-time filtering |
+| **7. Evaluation** | Golden dataset (10 test cases) + LLM-as-Judge scorer + RAG Triad metrics |
+
+## Tech Stack
+
+- **Next.js 15** (App Router) + **React 19**
+- **Vercel AI SDK v4** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`)
+- **PostgreSQL 16** + **pgvector** (local Docker)
+- **Drizzle ORM** for type-safe DB
+- **MCP** (Model Context Protocol) server
+- **Inngest** for background jobs
+- **Vitest** for testing
+- **shadcn/ui** + **Tailwind CSS**
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js 18+
+- Docker
+- OpenAI API key
+
+### Setup
+
+```bash
+# 1. Clone and install
+git clone <repo-url>
+cd agentic-realfy
+npm install
+
+# 2. Start local Postgres with pgvector
+docker compose up -d
+
+# 3. Create your .env file
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+
+# 4. Push database schema
+npm run db:push
+
+# 5. Enable pgvector extension (first time only)
+docker exec dealflow-db psql -U dealflow -d dealflow -c "CREATE EXTENSION IF NOT EXISTS vector;"
+
+# 6. Seed demo data
+npm run seed
+
+# 7. Start the app
+npm run dev
+```
+
+The app runs at `http://localhost:3000`.
+
+### Database
+
+Local Docker Postgres with pgvector on port **5433** (to avoid conflicts with existing local Postgres).
+
+```bash
+docker compose up -d    # Start
+docker compose down     # Stop
+docker compose down -v  # Stop + delete data
+```
+
+## Project Structure
+
+```
+app/
+  page.tsx                              # Landing page
+  (dashboard)/dashboard/
+    page.tsx                            # Sales rep dashboard
+    approvals/page.tsx                  # HITL approval queue
+    leads/page.tsx                      # Lead pipeline
+    knowledge/page.tsx                  # Knowledge base management
+    settings/page.tsx                   # Guardrail config
+  (chat)/chat/[companyId]/page.tsx      # Prospect-facing chat widget
+  api/
+    chat/route.ts                       # Main chat endpoint (Supervisor → Agents)
+    webhooks/[platform]/route.ts        # Webhook ingestion
+    approvals/[id]/route.ts             # HITL approval API
+    inngest/route.ts                    # Inngest background job serve endpoint
+lib/
+  agents/
+    supervisor.ts                       # Intent classification + routing
+    qualifier.ts                        # Lead qualification (BANT)
+    deal.ts                             # Pricing + negotiation
+    scheduler.ts                        # Meeting booking
+    knowledge.ts                        # RAG Q&A
+  ai/
+    models.ts                           # Model configs (GPT-4o-mini)
+    embedding.ts                        # Embedding + chunking utilities
+  db/
+    index.ts                            # Drizzle client (postgres.js)
+    schema/                             # 10 table schemas with pgvector
+  guardrails/
+    index.ts                            # 3-layer pipeline orchestrator
+    deterministic.ts                    # Regex rules
+    semantic.ts                         # Vector similarity filtering
+    llm-check.ts                        # LLM post-generation check
+    stream-guard.ts                     # TransformStream real-time guard
+    fallbacks.ts                        # Safe fallback responses
+  memory/
+    extract.ts                          # LLM fact extraction
+    consolidate.ts                      # LLM judge for contradictions
+    retrieve.ts                         # Semantic retrieval + injection
+  mcp/
+    server.ts                           # Standalone MCP server
+    client.ts                           # MCP client config
+  inngest/
+    client.ts                           # Inngest client
+    functions.ts                        # Background workers
+scripts/
+  seed.ts                               # Seed demo data
+  eval.ts                               # LLM-as-Judge evaluation
+  eval-rag.ts                           # RAG Triad evaluation
+evals/
+  golden-dataset.json                   # 10 test scenarios
+tests/
+  unit/                                 # Unit tests (no external deps)
+  integration/                          # Integration tests (DB + OpenAI)
+  e2e/                                  # End-to-end flow tests
+```
+
+## Database Schema
+
+10 tables with pgvector support:
+
+| Table | Purpose |
+|-------|---------|
+| `companies` | Company profiles with products, pricing, team, guardrail config |
+| `prospects` | Lead info with qualification scores and tags |
+| `conversations` | Status tracking (idle/processing/cancelled) with activeJobId |
+| `messages` | Full message history with role, tool_calls, agent_type |
+| `memories` | Prospect facts with vector embeddings + confidence |
+| `embeddings` | Chunked product docs/FAQs for RAG (pgvector) |
+| `pending_approvals` | HITL approval queue |
+| `banned_concepts` | Semantic guardrail embeddings |
+| `message_queue` | Async webhook processing |
+| `meetings` | Scheduled meetings |
+
+## HITL (Human-in-the-Loop) Workflow
+
+| Action | Approval Required? |
+|--------|-------------------|
+| Qualify a lead | No — autonomous |
+| Answer product questions | No — autonomous (RAG) |
+| Share standard pricing | No — autonomous |
+| Apply discount ≤ 10% | No — auto-approved |
+| Apply discount > 10% | **Yes** |
+| Send proposal | **Yes** — always |
+| Book a meeting | **Yes** — always |
+
+Sales reps review pending approvals at `/dashboard/approvals`.
+
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Unit tests only (no external services needed)
+npm run test:unit
+
+# Integration tests (needs Docker Postgres running)
+npm run test:integration
+
+# E2E tests (needs Docker Postgres running)
+npm run test:e2e
+
+# Integration tests with OpenAI (set OPENAI_API_KEY)
+OPENAI_API_KEY=sk-... npm run test:integration
+```
+
+### Test Coverage
+
+- **Unit tests**: Guardrail rules (deterministic, fallbacks, stream guard, pipeline), text chunking
+- **Integration tests**: Supervisor intent classification (real OpenAI), database CRUD operations, LLM guardrail checks, memory extraction
+- **E2E tests**: Full chat flow lifecycle, HITL approval workflow
+
+## Evaluation
+
+```bash
+# LLM-as-Judge scoring across 10 test cases
+npm run eval
+
+# RAG Triad: context relevance, faithfulness, answer relevance
+npm run eval:rag
+```
+
+The golden dataset at `evals/golden-dataset.json` covers: product questions, pricing inquiries, discount requests (auto + HITL), meeting booking, lead qualification, guardrail enforcement, and multi-turn conversations.
+
+## MCP Server
+
+Standalone MCP server exposing company data:
+
+```bash
+npm run mcp:server
+```
+
+**Tools**: `getProduct`, `searchDocs`, `getCaseStudy`, `getTeamAvailability`, `getProspectHistory`
+
+**Resources**: `company://products/catalog`, `company://pricing/all`
+
+## Demo Scenarios
+
+1. **Lead Qualification** — Prospect shares company info → QualifierAgent asks BANT questions, scores the lead
+2. **Product Q&A** — "What integrations do you support?" → KnowledgeAgent searches docs, answers from RAG
+3. **Deal Negotiation** — "How much?" → DealAgent shares pricing → "Can I get 25% off?" → HITL approval triggered
+4. **Meeting Booking** — "Schedule a demo" → SchedulerAgent checks availability → HITL for confirmation
+5. **Guardrails** — "What are your internal margins?" → Deterministic guardrail blocks, returns safe fallback
+6. **Memory** — Chat across sessions → agent remembers budget, timeline, requirements
+
+## Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server (Turbopack) |
+| `npm run build` | Production build |
+| `npm run db:push` | Push schema to DB |
+| `npm run db:studio` | Open Drizzle Studio |
+| `npm run db:generate` | Generate migrations |
+| `npm run db:migrate` | Run migrations |
+| `npm run seed` | Seed demo data |
+| `npm run test` | Run all tests |
+| `npm run test:unit` | Run unit tests only |
+| `npm run test:integration` | Run integration tests |
+| `npm run test:e2e` | Run E2E tests |
+| `npm run eval` | Run LLM-as-Judge evals |
+| `npm run eval:rag` | Run RAG Triad evals |
+| `npm run mcp:server` | Start MCP server |

@@ -4,12 +4,15 @@ import { createStreamGuard } from "@/lib/guardrails/stream-guard";
 describe("Stream Guard", () => {
   it("passes through clean chunks", async () => {
     const guard = createStreamGuard();
-    const reader = guard.readable.getReader();
     const writer = guard.writable.getWriter();
+    const reader = guard.readable.getReader();
 
-    await writer.write("Hello, how can I ");
-    await writer.write("help you today?");
-    await writer.close();
+    // Write and close in background
+    const writePromise = (async () => {
+      await writer.write("Hello, how can I ");
+      await writer.write("help you today?");
+      await writer.close();
+    })();
 
     const chunks: string[] = [];
     while (true) {
@@ -18,17 +21,25 @@ describe("Stream Guard", () => {
       chunks.push(value);
     }
 
+    await writePromise;
     expect(chunks.join("")).toBe("Hello, how can I help you today?");
   });
 
   it("halts stream on confidential info violation", async () => {
     const guard = createStreamGuard();
-    const reader = guard.readable.getReader();
     const writer = guard.writable.getWriter();
+    const reader = guard.readable.getReader();
 
-    await writer.write("Our ");
-    await writer.write("internal pricing margin is 80%");
-    // Stream should be terminated by guard
+    // Write in background - the second chunk triggers the guard
+    const writePromise = (async () => {
+      try {
+        await writer.write("Our ");
+        await writer.write("internal pricing margin is 80%");
+        await writer.close();
+      } catch {
+        // Writer may error when stream is terminated by guard - that's expected
+      }
+    })();
 
     const chunks: string[] = [];
     while (true) {
@@ -37,6 +48,7 @@ describe("Stream Guard", () => {
       chunks.push(value);
     }
 
+    await writePromise;
     const output = chunks.join("");
     // Should contain the fallback response, not the original confidential content
     expect(output).not.toContain("80%");
