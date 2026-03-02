@@ -241,13 +241,15 @@ Return { meetingLink, calendarEventCreated }
 
 | Category | Count | What's Tested |
 |----------|-------|---------------|
-| **Unit — Guardrails** | 60+ | Deterministic regex, semantic matching, LLM check, fallbacks, stream guard |
-| **Unit — Agents** | 48+ | Qualifier scoring, deal pricing, scheduler slots, routing logic |
+| **Unit — Guardrails** | 70+ | Deterministic regex, semantic threshold, LLM check, fallbacks, stream guard, pipeline contract |
+| **Unit — Agents** | 65+ | Qualifier scoring, deal pricing, scheduler slots, knowledge agent, routing logic, supervisor mapping, conditional re-routing |
 | **Unit — Integrations** | 55+ | Email/Slack/Telegram parsing, calendar slots, outbound dispatch, Slack MCP, cross-platform contract |
-| **Unit — Other** | 8+ | Memory formatting, embedding chunking, MCP filters |
-| **Integration** | 14+ | Supervisor classification, database ops, memory pipeline |
+| **Unit — Memory** | 25+ | Formatting, extraction schema, consolidation decisions, fact categorization |
+| **Unit — Pipeline** | 10+ | Inngest payload parsing, step validation, message ordering |
+| **Unit — Other** | 8+ | Embedding chunking, MCP filters |
+| **Integration** | 14+ | Supervisor classification, database ops, memory extraction |
 | **E2E** | 16+ | Chat flow lifecycle, approval flow, webhook pipeline |
-| **Total** | **200+** | Full coverage across all modules |
+| **Total** | **287** | Full coverage across all modules |
 
 ---
 
