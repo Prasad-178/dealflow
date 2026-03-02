@@ -39,15 +39,45 @@ Prospect (Chat Widget)  →  /api/chat  →  Guardrails (Pre)  →  Supervisor A
 | **6. Guardrails** | 3-layer pipeline: deterministic regex → semantic similarity (pgvector) → LLM post-check. TransformStream guard for real-time filtering |
 | **7. Evaluation** | Golden dataset (10 test cases) + LLM-as-Judge scorer + RAG Triad metrics |
 
+## Platform Integrations
+
+Prospects can reach the agent from **any channel** — the async webhook pipeline processes messages identically regardless of source.
+
+| Platform | Inbound | Outbound | Verification |
+|----------|---------|----------|-------------|
+| **Email** (Resend) | Webhook → `parseEmailPayload` | `sendEmail` with In-Reply-To threading | Trusted relay |
+| **Slack** (Web API + MCP) | Events API → `parseSlackPayload` | `chat.postMessage` with thread support | HMAC-SHA256 + 5-min replay guard |
+| **Telegram** (Bot API) | Webhook → `parseTelegramPayload` | `/sendMessage` via fetch | Secret token header |
+| **Google Calendar** | — | `createCalendarEvent` with auto Meet link | Service account JWT |
+| **Widget** | Direct POST | Inline response | Same-origin |
+
+All integrations are **optional** — the app works fully without any external API keys configured (graceful fallbacks everywhere).
+
+### Async Webhook Pipeline (Inngest)
+
+```
+Inbound webhook → verify signature → queue in DB → fire Inngest event → return 200 OK
+                                                          ↓
+Inngest Worker (16 checkpointed steps):
+  Parse payload → Get/create prospect → Create conversation → Store message
+  → Input guardrails → Retrieve memories → Classify intent → Run agent
+  → Output guardrails → Store reply → Send outbound message → Mark completed
+  → Emit memory extraction event
+```
+
 ## Tech Stack
 
 - **Next.js 15** (App Router) + **React 19**
 - **Vercel AI SDK v4** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`)
 - **PostgreSQL 16** + **pgvector** (local Docker)
 - **Drizzle ORM** for type-safe DB
-- **MCP** (Model Context Protocol) server
-- **Inngest** for background jobs
-- **Vitest** for testing
+- **MCP** (Model Context Protocol) — local server + Slack MCP
+- **Inngest** for background job processing (16-step pipeline)
+- **Resend** for email (inbound/outbound)
+- **Slack Web API** + **Slack MCP** for workspace integration
+- **Telegram Bot API** for messaging
+- **Google Calendar API** for real availability + meeting creation
+- **Vitest** for testing (287 tests)
 - **shadcn/ui** + **Tailwind CSS**
 
 ## Quick Start
@@ -120,7 +150,7 @@ lib/
     supervisor.ts                       # Intent classification + routing
     qualifier.ts                        # Lead qualification (BANT)
     deal.ts                             # Pricing + negotiation
-    scheduler.ts                        # Meeting booking
+    scheduler.ts                        # Meeting booking (real Google Calendar)
     knowledge.ts                        # RAG Q&A
   ai/
     models.ts                           # Model configs (GPT-4o-mini)
@@ -135,6 +165,14 @@ lib/
     llm-check.ts                        # LLM post-generation check
     stream-guard.ts                     # TransformStream real-time guard
     fallbacks.ts                        # Safe fallback responses
+  integrations/
+    types.ts                            # NormalizedMessage, ReplyTarget, OutboundMessage
+    email.ts                            # Resend: parse, send, meeting confirmations
+    slack.ts                            # Slack Web API: verify, parse, send
+    slack-mcp.ts                        # Slack MCP server config (OAuth + Streamable HTTP)
+    telegram.ts                         # Telegram Bot API: verify, parse, send
+    calendar.ts                         # Google Calendar: availability + event creation
+    outbound.ts                         # Platform dispatcher (routes to correct sender)
   memory/
     extract.ts                          # LLM fact extraction
     consolidate.ts                      # LLM judge for contradictions
@@ -144,7 +182,7 @@ lib/
     client.ts                           # MCP client config
   inngest/
     client.ts                           # Inngest client
-    functions.ts                        # Background workers
+    functions.ts                        # 16-step webhook pipeline + memory extraction
 scripts/
   seed.ts                               # Seed demo data
   eval.ts                               # LLM-as-Judge evaluation
@@ -186,7 +224,40 @@ tests/
 | Send proposal | **Yes** — always |
 | Book a meeting | **Yes** — always |
 
-Sales reps review pending approvals at `/dashboard/approvals`.
+Sales reps review pending approvals at `/dashboard/approvals`. When a meeting is approved, a Google Calendar event with auto-generated Meet link is created and a confirmation email is sent to the prospect via Resend.
+
+## Environment Variables
+
+Only `DATABASE_URL` and `OPENAI_API_KEY` are required. All integrations are optional with graceful fallbacks.
+
+```bash
+# Required
+DATABASE_URL=postgresql://dealflow:dealflow@localhost:5433/dealflow
+OPENAI_API_KEY=sk-...
+
+# Email (Resend) — optional
+RESEND_API_KEY=re_...
+RESEND_FROM_EMAIL=noreply@yourdomain.com
+
+# Slack — optional
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_SIGNING_SECRET=...
+
+# Telegram — optional
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_WEBHOOK_SECRET=...
+
+# Google Calendar — optional (falls back to fake slots)
+GOOGLE_SERVICE_ACCOUNT_EMAIL=...@...iam.gserviceaccount.com
+GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+GOOGLE_CALENDAR_ID=primary
+
+# App
+DEFAULT_COMPANY_ID=<uuid from companies table>
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+See `.env.example` for the full list with descriptions.
 
 ## Testing
 
@@ -207,11 +278,17 @@ npm run test:e2e
 OPENAI_API_KEY=sk-... npm run test:integration
 ```
 
-### Test Coverage
+### Test Coverage — 287 tests across 33 files
 
-- **Unit tests**: Guardrail rules (deterministic, fallbacks, stream guard, pipeline), text chunking
-- **Integration tests**: Supervisor intent classification (real OpenAI), database CRUD operations, LLM guardrail checks, memory extraction
-- **E2E tests**: Full chat flow lifecycle, HITL approval workflow
+| Category | Count | What's Tested |
+|----------|-------|---------------|
+| **Unit — Guardrails** | 70+ | Deterministic regex, semantic threshold, LLM check, fallbacks, stream guard, pipeline contract |
+| **Unit — Agents** | 65+ | Qualifier scoring, deal pricing, scheduler slots, knowledge agent, routing logic, supervisor mapping |
+| **Unit — Integrations** | 55+ | Email/Slack/Telegram parsing, calendar slots, outbound dispatch, Slack MCP, cross-platform contract |
+| **Unit — Memory** | 25+ | Formatting, extraction schema, consolidation decisions, fact categorization |
+| **Unit — Pipeline** | 10+ | Inngest payload parsing, step validation, message ordering |
+| **Integration** | 14+ | Supervisor classification, database ops, memory extraction |
+| **E2E** | 16+ | Chat flow lifecycle, approval flow, webhook pipeline |
 
 ## Evaluation
 
