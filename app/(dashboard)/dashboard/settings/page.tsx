@@ -33,6 +33,8 @@ export default function SettingsPage() {
     setBlockedTopics((prev) => prev.filter((_, i) => i !== index));
   }
 
+  const discountNum = parseInt(maxDiscount) || 25;
+
   return (
     <div className="p-8 max-w-4xl">
       <div className="mb-8">
@@ -123,19 +125,27 @@ export default function SettingsPage() {
                 <span className="text-sm text-muted-foreground">%</span>
               </div>
             </div>
-            <div className="flex items-center gap-4 pt-2">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-green-500" />
-                <span className="text-sm">0-10%: Auto-approved</span>
+            {/* Discount progress bar */}
+            <div className="space-y-2 pt-2">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-green-500" />
+                  <span className="text-sm">0-10%: Auto-approved</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-yellow-500" />
+                  <span className="text-sm">11-{maxDiscount}%: Requires approval</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-red-500" />
+                  <span className="text-sm">{">"}
+                    {maxDiscount}%: Blocked</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-yellow-500" />
-                <span className="text-sm">11-{maxDiscount}%: Requires approval</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-red-500" />
-                <span className="text-sm">{">"}
-                  {maxDiscount}%: Blocked</span>
+              <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                <div className="bg-green-500 h-full" style={{ width: `${(10 / 50) * 100}%` }} />
+                <div className="bg-yellow-500 h-full" style={{ width: `${((discountNum - 10) / 50) * 100}%` }} />
+                <div className="bg-red-500 h-full" style={{ width: `${((50 - discountNum) / 50) * 100}%` }} />
               </div>
             </div>
           </CardContent>
@@ -188,7 +198,7 @@ export default function SettingsPage() {
               ].map((rule) => (
                 <div
                   key={rule.action}
-                  className="flex items-center justify-between p-3 rounded-lg border"
+                  className="flex items-center justify-between p-3 rounded-lg bg-card border border-border/50"
                 >
                   <div>
                     <p className="font-medium">{rule.action}</p>

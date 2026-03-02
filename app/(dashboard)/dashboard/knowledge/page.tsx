@@ -80,6 +80,13 @@ const sourceLabels: Record<string, string> = {
   pricing: "Pricing",
 };
 
+const sourceAccents: Record<string, string> = {
+  product_doc: "border-l-blue-500",
+  faq: "border-l-green-500",
+  case_study: "border-l-purple-500",
+  pricing: "border-l-orange-500",
+};
+
 export default function KnowledgePage() {
   const [search, setSearch] = useState("");
 
@@ -114,8 +121,8 @@ export default function KnowledgePage() {
           return (
             <Card key={type}>
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Icon className="h-5 w-5 text-primary" />
+                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <Icon className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{count}</p>
@@ -143,10 +150,10 @@ export default function KnowledgePage() {
         {filtered.map((entry) => {
           const Icon = sourceIcons[entry.sourceType];
           return (
-            <Card key={entry.id} className="hover:border-primary/50 transition-colors cursor-pointer">
+            <Card key={entry.id} className={`border-l-4 ${sourceAccents[entry.sourceType]} hover:border-primary/50 transition-colors cursor-pointer`}>
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                  <Icon className="h-5 w-5 text-slate-500" />
+                <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center">
+                  <Icon className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="flex-1">
                   <p className="font-medium">{entry.title}</p>

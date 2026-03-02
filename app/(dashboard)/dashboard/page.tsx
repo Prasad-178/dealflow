@@ -21,24 +21,28 @@ const stats = [
     value: "47",
     change: "+12%",
     icon: Users,
+    accent: "border-t-primary",
   },
   {
     label: "Qualification Rate",
     value: "68%",
     change: "+5%",
     icon: Target,
+    accent: "border-t-green-500",
   },
   {
     label: "Pending Approvals",
     value: "3",
     change: "",
     icon: Clock,
+    accent: "border-t-yellow-500",
   },
   {
     label: "Deals Closed",
     value: "12",
     change: "+18%",
     icon: TrendingUp,
+    accent: "border-t-purple-500",
   },
 ];
 
@@ -82,14 +86,14 @@ export default function DashboardPage() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {stats.map((stat) => (
-          <Card key={stat.label}>
+          <Card key={stat.label} className={`border-t-2 ${stat.accent}`}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">{stat.label}</p>
                   <p className="text-3xl font-bold mt-1">{stat.value}</p>
                   {stat.change && (
-                    <p className="text-sm text-green-600 mt-1">{stat.change} this week</p>
+                    <p className="text-sm text-green-400 mt-1">{stat.change} this week</p>
                   )}
                 </div>
                 <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -112,10 +116,10 @@ export default function DashboardPage() {
             {recentConversations.map((conv, i) => (
               <div
                 key={i}
-                className="flex items-center gap-4 p-4 rounded-lg border hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-4 p-4 rounded-lg border border-border/50 hover:bg-accent transition-colors"
               >
-                <div className="h-10 w-10 rounded-full bg-slate-200 flex items-center justify-center">
-                  <MessageSquare className="h-5 w-5 text-slate-500" />
+                <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

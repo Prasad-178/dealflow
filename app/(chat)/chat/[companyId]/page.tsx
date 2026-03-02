@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Send, Bot, User, Loader2, Sparkles } from "lucide-react";
 import { use } from "react";
@@ -90,16 +89,16 @@ export default function ChatPage({
   }
 
   const agentColors: Record<string, string> = {
-    knowledge: "bg-blue-100 text-blue-800",
-    qualifier: "bg-green-100 text-green-800",
-    deal: "bg-purple-100 text-purple-800",
-    scheduler: "bg-orange-100 text-orange-800",
+    knowledge: "bg-blue-500/15 text-blue-400",
+    qualifier: "bg-green-500/15 text-green-400",
+    deal: "bg-purple-500/15 text-purple-400",
+    scheduler: "bg-orange-500/15 text-orange-400",
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className="flex flex-col h-screen bg-background">
       {/* Header */}
-      <header className="border-b bg-white/80 backdrop-blur-sm px-6 py-4">
+      <header className="border-b border-border/50 bg-card/80 backdrop-blur-xl px-6 py-4">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
             <Sparkles className="h-5 w-5 text-white" />
@@ -143,7 +142,7 @@ export default function ChatPage({
                   <button
                     key={suggestion}
                     onClick={() => setInput(suggestion)}
-                    className="px-4 py-2 rounded-full border bg-white text-sm hover:bg-slate-50 transition-colors"
+                    className="px-4 py-2 rounded-full border border-border/50 bg-card text-sm hover:bg-accent transition-colors"
                   >
                     {suggestion}
                   </button>
@@ -168,7 +167,7 @@ export default function ChatPage({
                 className={`max-w-[80%] ${
                   message.role === "user"
                     ? "bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3"
-                    : "bg-white border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm"
+                    : "bg-card border border-border/50 rounded-2xl rounded-bl-md px-4 py-3"
                 }`}
               >
                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
@@ -176,7 +175,7 @@ export default function ChatPage({
                   <div className="mt-2 flex items-center gap-2">
                     <span
                       className={`text-[10px] px-2 py-0.5 rounded-full ${
-                        agentColors[message.agentType] || "bg-gray-100 text-gray-600"
+                        agentColors[message.agentType] || "bg-muted text-muted-foreground"
                       }`}
                     >
                       {message.agentType}
@@ -190,8 +189,8 @@ export default function ChatPage({
                 )}
               </div>
               {message.role === "user" && (
-                <div className="h-8 w-8 rounded-lg bg-slate-200 flex items-center justify-center shrink-0 mt-1">
-                  <User className="h-4 w-4 text-slate-600" />
+                <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-1">
+                  <User className="h-4 w-4 text-muted-foreground" />
                 </div>
               )}
             </div>
@@ -202,7 +201,7 @@ export default function ChatPage({
               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <Bot className="h-4 w-4 text-primary" />
               </div>
-              <div className="bg-white border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+              <div className="bg-card border border-border/50 rounded-2xl rounded-bl-md px-4 py-3">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             </div>
@@ -213,21 +212,23 @@ export default function ChatPage({
       </div>
 
       {/* Input */}
-      <div className="border-t bg-white/80 backdrop-blur-sm px-6 py-4">
+      <div className="border-t border-border/50 bg-card/80 backdrop-blur-xl px-6 py-4">
         <form
           onSubmit={handleSubmit}
-          className="max-w-3xl mx-auto flex gap-2"
+          className="max-w-3xl mx-auto"
         >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            disabled={isLoading}
-            className="flex-1"
-          />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
-            <Send className="h-4 w-4" />
-          </Button>
+          <div className="bg-muted rounded-xl p-2 flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type your message..."
+              disabled={isLoading}
+              className="flex-1 border-0 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
+            />
+            <Button type="submit" disabled={isLoading || !input.trim()} size="sm" className="rounded-lg">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
         </form>
       </div>
     </div>

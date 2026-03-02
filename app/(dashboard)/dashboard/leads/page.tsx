@@ -66,10 +66,10 @@ const leads = [
 ];
 
 const tierColors: Record<string, string> = {
-  hot: "bg-red-100 text-red-800",
-  warm: "bg-orange-100 text-orange-800",
-  cool: "bg-blue-100 text-blue-800",
-  cold: "bg-slate-100 text-slate-800",
+  hot: "bg-red-500/15 text-red-400",
+  warm: "bg-orange-500/15 text-orange-400",
+  cool: "bg-blue-500/15 text-blue-400",
+  cold: "bg-muted text-muted-foreground",
 };
 
 const pipeline = [
@@ -95,7 +95,7 @@ export default function LeadsPage() {
       <div className="flex items-center gap-2 mb-8 overflow-x-auto pb-2">
         {pipeline.map((stage, i) => (
           <div key={stage.stage} className="flex items-center">
-            <div className="bg-white border rounded-lg px-4 py-3 min-w-[120px] text-center">
+            <div className={`bg-card border border-border/50 rounded-lg px-4 py-3 min-w-[120px] text-center ${stage.stage === "Closed Won" ? "border-green-500/30 bg-green-500/5" : ""}`}>
               <p className="text-2xl font-bold">{stage.count}</p>
               <p className="text-xs text-muted-foreground">{stage.stage}</p>
             </div>
@@ -119,7 +119,7 @@ export default function LeadsPage() {
             {leads.map((lead, i) => (
               <div
                 key={i}
-                className="flex items-center gap-4 p-4 rounded-lg border hover:bg-slate-50 transition-colors cursor-pointer"
+                className="flex items-center gap-4 p-4 rounded-lg border border-border/50 hover:bg-accent transition-colors cursor-pointer"
               >
                 <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold text-primary">
                   {lead.name[0]}

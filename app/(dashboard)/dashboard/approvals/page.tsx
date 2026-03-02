@@ -107,7 +107,7 @@ export default function ApprovalsPage() {
         ) : (
           <div className="space-y-4">
             {pending.map((approval) => (
-              <Card key={approval.id} className="border-yellow-200">
+              <Card key={approval.id} className="border-l-4 border-l-yellow-500">
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -129,7 +129,7 @@ export default function ApprovalsPage() {
                   <CardDescription>{approval.context}</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="bg-slate-50 rounded-lg p-4 mb-4 font-mono text-sm">
+                  <div className="bg-muted rounded-lg p-4 mb-4 font-mono text-sm">
                     <pre className="whitespace-pre-wrap">
                       {JSON.stringify(approval.toolInput, null, 2)}
                     </pre>
@@ -137,7 +137,7 @@ export default function ApprovalsPage() {
                   <div className="flex gap-2">
                     <Button
                       onClick={() => handleApproval(approval.id, "approved")}
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-green-600 hover:bg-green-500"
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
                       Approve
@@ -162,7 +162,7 @@ export default function ApprovalsPage() {
                     </Button>
                   </div>
                   {expandedId === approval.id && (
-                    <div className="mt-4 p-4 bg-white border rounded-lg">
+                    <div className="mt-4 p-4 bg-muted border border-border/50 rounded-lg">
                       <h4 className="font-medium mb-2">Full Conversation Context</h4>
                       <p className="text-sm text-muted-foreground">
                         {approval.context}
