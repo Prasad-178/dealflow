@@ -9,7 +9,7 @@ import {
 export const messageQueue = pgTable("message_queue", {
   id: uuid("id").defaultRandom().primaryKey(),
   platform: text("platform", {
-    enum: ["slack", "email", "widget", "api"],
+    enum: ["slack", "email", "telegram", "widget", "api"],
   }).notNull(),
   payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
   status: text("status", {
