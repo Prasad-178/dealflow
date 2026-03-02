@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Clock, Eye } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Eye, Video } from "lucide-react";
 
 type Approval = {
   id: string;
@@ -74,10 +74,27 @@ export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState(mockApprovals);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  function handleApproval(id: string, status: "approved" | "denied") {
+  const [meetLinks, setMeetLinks] = useState<Record<string, string>>({});
+
+  async function handleApproval(id: string, status: "approved" | "denied") {
     setApprovals((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status } : a))
     );
+
+    // Call API and capture meet link if returned
+    try {
+      const res = await fetch(`/api/approvals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json();
+      if (data.meetingLink) {
+        setMeetLinks((prev) => ({ ...prev, [id]: data.meetingLink }));
+      }
+    } catch {
+      // UI already updated optimistically
+    }
   }
 
   const pending = approvals.filter((a) => a.status === "pending");
@@ -185,23 +202,41 @@ export default function ApprovalsPage() {
         <div className="space-y-3">
           {resolved.map((approval) => (
             <Card key={approval.id} className="opacity-75">
-              <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Badge
-                    variant={
-                      approval.status === "approved" ? "success" : "destructive"
-                    }
-                  >
-                    {approval.status}
-                  </Badge>
-                  <span className="font-medium">{approval.toolName}</span>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Badge
+                      variant={
+                        approval.status === "approved" ? "success" : "destructive"
+                      }
+                    >
+                      {approval.status}
+                    </Badge>
+                    <span className="font-medium">{approval.toolName}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {approval.agentType} agent
+                    </span>
+                  </div>
                   <span className="text-sm text-muted-foreground">
-                    {approval.agentType} agent
+                    {new Date(approval.createdAt).toLocaleString()}
                   </span>
                 </div>
-                <span className="text-sm text-muted-foreground">
-                  {new Date(approval.createdAt).toLocaleString()}
-                </span>
+                {approval.status === "approved" &&
+                  approval.toolName === "bookMeeting" &&
+                  meetLinks[approval.id] && (
+                    <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                      <Video className="h-4 w-4" />
+                      <span>Calendar event created</span>
+                      <a
+                        href={meetLinks[approval.id]}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline"
+                      >
+                        Join Google Meet
+                      </a>
+                    </div>
+                  )}
               </CardContent>
             </Card>
           ))}

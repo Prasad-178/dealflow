@@ -13,6 +13,9 @@ import {
   Clock,
   MessageSquare,
   Target,
+  Mail,
+  Send,
+  Globe,
 } from "lucide-react";
 
 const stats = [
@@ -46,12 +49,21 @@ const stats = [
   },
 ];
 
+const platformConfig: Record<string, { icon: typeof MessageSquare; label: string }> = {
+  widget: { icon: Globe, label: "Widget" },
+  email: { icon: Mail, label: "Email" },
+  slack: { icon: MessageSquare, label: "Slack" },
+  telegram: { icon: Send, label: "Telegram" },
+  api: { icon: Globe, label: "API" },
+};
+
 const recentConversations = [
   {
     prospect: "Alex Rivera",
     company: "TechStartup Inc",
     lastMessage: "Can you tell me more about the Enterprise plan?",
     agent: "deal",
+    platform: "widget",
     time: "2 min ago",
     score: 85,
   },
@@ -60,6 +72,7 @@ const recentConversations = [
     company: "FinanceHub",
     lastMessage: "We need something that integrates with Salesforce",
     agent: "knowledge",
+    platform: "slack",
     time: "15 min ago",
     score: 72,
   },
@@ -68,6 +81,7 @@ const recentConversations = [
     company: "StartupXYZ",
     lastMessage: "What's your pricing for a team of 10?",
     agent: "qualifier",
+    platform: "email",
     time: "1 hr ago",
     score: 45,
   },
@@ -132,17 +146,29 @@ export default function DashboardPage() {
                     {conv.lastMessage}
                   </p>
                 </div>
-                <Badge
-                  variant={
-                    conv.agent === "deal"
-                      ? "default"
-                      : conv.agent === "knowledge"
-                        ? "secondary"
-                        : "outline"
-                  }
-                >
-                  {conv.agent}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const pConfig = platformConfig[conv.platform] || platformConfig.widget;
+                    const PlatformIcon = pConfig.icon;
+                    return (
+                      <Badge variant="outline" className="gap-1">
+                        <PlatformIcon className="h-3 w-3" />
+                        {pConfig.label}
+                      </Badge>
+                    );
+                  })()}
+                  <Badge
+                    variant={
+                      conv.agent === "deal"
+                        ? "default"
+                        : conv.agent === "knowledge"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {conv.agent}
+                  </Badge>
+                </div>
                 <div className="text-right">
                   <div className="flex items-center gap-1">
                     <div

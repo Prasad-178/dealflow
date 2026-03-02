@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Shield, DollarSign, Users, AlertTriangle } from "lucide-react";
+import { Shield, DollarSign, Users, AlertTriangle, Plug, Mail, MessageSquare, Send, Calendar } from "lucide-react";
 
 export default function SettingsPage() {
   const [maxDiscount, setMaxDiscount] = useState("25");
@@ -208,6 +208,69 @@ export default function SettingsPage() {
                   </div>
                   <Badge variant={rule.required ? "default" : "secondary"}>
                     {rule.required ? "Approval Required" : "Autonomous"}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Integrations */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Plug className="h-5 w-5 text-primary" />
+              Integrations
+            </CardTitle>
+            <CardDescription>
+              Platform connections for inbound/outbound messaging and calendar
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[
+                {
+                  name: "Email (Resend)",
+                  icon: Mail,
+                  configured: !!(process.env.NEXT_PUBLIC_RESEND_CONFIGURED === "true"),
+                  description: "Receive and reply to inbound emails",
+                },
+                {
+                  name: "Slack",
+                  icon: MessageSquare,
+                  configured: !!(process.env.NEXT_PUBLIC_SLACK_CONFIGURED === "true"),
+                  description: "Respond to Slack messages via Events API",
+                },
+                {
+                  name: "Telegram",
+                  icon: Send,
+                  configured: !!(process.env.NEXT_PUBLIC_TELEGRAM_CONFIGURED === "true"),
+                  description: "Respond to Telegram bot messages",
+                },
+                {
+                  name: "Google Calendar",
+                  icon: Calendar,
+                  configured: !!(process.env.NEXT_PUBLIC_CALENDAR_CONFIGURED === "true"),
+                  description: "Real availability checks and meeting creation with Google Meet",
+                },
+              ].map((integration) => (
+                <div
+                  key={integration.name}
+                  className="flex items-center justify-between p-3 rounded-lg bg-card border border-border/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
+                      <integration.icon className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="font-medium">{integration.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {integration.description}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant={integration.configured ? "success" : "secondary"}>
+                    {integration.configured ? "Connected" : "Not configured"}
                   </Badge>
                 </div>
               ))}
