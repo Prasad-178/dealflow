@@ -6,6 +6,41 @@ import { pendingApprovals, meetings, companies } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { addDays, format, setHours, setMinutes } from "date-fns";
 
+// --- Extracted pure logic for testability ---
+
+export type TimeSlot = {
+  date: string;
+  time: string;
+  available: boolean;
+};
+
+export function generateAvailableSlots(baseDate: Date): TimeSlot[] {
+  const slots: TimeSlot[] = [];
+  for (let i = 0; i < 3; i++) {
+    const date = addDays(baseDate, i);
+    if (date.getDay() === 0 || date.getDay() === 6) continue;
+
+    slots.push(
+      {
+        date: format(date, "yyyy-MM-dd"),
+        time: "10:00 AM ET",
+        available: true,
+      },
+      {
+        date: format(date, "yyyy-MM-dd"),
+        time: "2:00 PM ET",
+        available: true,
+      },
+      {
+        date: format(date, "yyyy-MM-dd"),
+        time: "4:00 PM ET",
+        available: i !== 1,
+      }
+    );
+  }
+  return slots;
+}
+
 export async function runSchedulerAgent({
   messages,
   companyId,
@@ -52,29 +87,7 @@ ${prospectContext ? `\nProspect context:\n${prospectContext}` : ""}`,
             ? new Date(preferredDate)
             : addDays(new Date(), 1);
 
-          const slots = [];
-          for (let i = 0; i < 3; i++) {
-            const date = addDays(baseDate, i);
-            if (date.getDay() === 0 || date.getDay() === 6) continue;
-
-            slots.push(
-              {
-                date: format(date, "yyyy-MM-dd"),
-                time: "10:00 AM ET",
-                available: true,
-              },
-              {
-                date: format(date, "yyyy-MM-dd"),
-                time: "2:00 PM ET",
-                available: true,
-              },
-              {
-                date: format(date, "yyyy-MM-dd"),
-                time: "4:00 PM ET",
-                available: i !== 1,
-              }
-            );
-          }
+          const slots = generateAvailableSlots(baseDate);
 
           return {
             slots: slots.filter((s) => s.available),

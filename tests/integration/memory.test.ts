@@ -26,9 +26,21 @@ describe.skipIf(!hasOpenAI)("Memory Extraction (Integration)", () => {
       const { object } = await generateObject({
         model: memoryModel,
         schema: factsSchema,
-        system: `Extract specific, actionable facts about the prospect from this conversation.
-Focus on: budget, timeline, needs, objections, preferences, context.
-Only extract facts that are explicitly stated or strongly implied.`,
+        system: `You are a fact extraction specialist. Extract specific, actionable facts about the prospect from this conversation.
+
+Focus on:
+- Budget information (specific numbers, ranges, constraints)
+- Timeline (when they need a solution, urgency)
+- Needs (specific problems, requirements, use cases)
+- Objections (concerns, hesitations, blockers)
+- Preferences (preferred features, communication style, decision process)
+- Context (company size, industry, role, current tools)
+
+Rules:
+- Only extract facts that are explicitly stated or strongly implied
+- Each fact should be a single, specific piece of information
+- Set confidence based on how explicitly stated the fact is
+- Do NOT extract generic or obvious information`,
         messages: msgs.map((m) => ({
           role: m.role as "user" | "assistant",
           content: m.content,

@@ -5,6 +5,49 @@ import { db } from "@/lib/db";
 import { companies, pendingApprovals } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+// --- Extracted pure logic for testability ---
+
+export function isDiscountAutoApproved(discountPercent: number): boolean {
+  return discountPercent <= 10;
+}
+
+export type PricingTier = {
+  product: string;
+  tier: string;
+  price: number;
+  billingCycle: string;
+  features: string[];
+};
+
+export function filterPricingTiers(
+  products: { name: string; pricingTiers: { name: string; price: number; billingCycle: string; features: string[] }[] }[],
+  tier?: string
+): PricingTier[] {
+  const allTiers = products.flatMap((p) =>
+    p.pricingTiers.map((t) => ({
+      product: p.name,
+      tier: t.name,
+      price: t.price,
+      billingCycle: t.billingCycle,
+      features: t.features,
+    }))
+  );
+  if (tier && tier !== "all") {
+    return allTiers.filter(
+      (t) => t.tier.toLowerCase() === tier.toLowerCase()
+    );
+  }
+  return allTiers;
+}
+
+export function detectApprovalStatus(steps: { toolResults: any[] }[]): boolean {
+  return steps.some((s) =>
+    s.toolResults.some(
+      (tr: any) => tr?.result?.status === "pending_approval"
+    )
+  );
+}
+
 export async function runDealAgent({
   messages,
   companyId,

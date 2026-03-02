@@ -2,6 +2,31 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 
+// --- Exported data and pure logic for testability ---
+
+export { PRODUCTS, DOCS, CASE_STUDIES, TEAM };
+
+export function searchDocsFilter(query: string, docs: typeof DOCS) {
+  const queryLower = query.toLowerCase();
+  return docs.filter(
+    (d) =>
+      d.title.toLowerCase().includes(queryLower) ||
+      d.content.toLowerCase().includes(queryLower)
+  );
+}
+
+export function getCaseStudyFilter(industry: string, caseStudies: typeof CASE_STUDIES) {
+  return caseStudies.filter((cs) =>
+    cs.industry.toLowerCase().includes(industry.toLowerCase())
+  );
+}
+
+export function getProductById(productId: string | undefined, products: typeof PRODUCTS) {
+  return productId
+    ? products.find((p) => p.id === productId)
+    : products[0];
+}
+
 const server = new McpServer({
   name: "dealflow-company-data",
   version: "1.0.0",

@@ -5,6 +5,41 @@ import { db } from "@/lib/db";
 import { prospects } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+// --- Extracted pure logic for testability ---
+
+const BANT_SCORES: Record<string, number> = {
+  enterprise: 30, mid_market: 20, smb: 10, unknown: 5,
+  decision_maker: 25, influencer: 15, user: 10,
+  critical: 25, nice_to_have: 15, exploring: 5,
+  immediate: 20, this_quarter: 15, this_year: 10, no_timeline: 5,
+};
+
+export function calculateLeadScore(budget: string, authority: string, need: string, timeline: string): number {
+  return (
+    (BANT_SCORES[budget] || 5) +
+    (BANT_SCORES[authority] || 5) +
+    (BANT_SCORES[need] || 5) +
+    (BANT_SCORES[timeline] || 5)
+  );
+}
+
+export function getTier(score: number): "hot" | "warm" | "cool" | "cold" {
+  if (score >= 80) return "hot";
+  if (score >= 50) return "warm";
+  if (score >= 30) return "cool";
+  return "cold";
+}
+
+export function getRecommendation(tier: string): string {
+  if (tier === "hot") return "High-value lead! Suggest booking a demo immediately.";
+  if (tier === "warm") return "Good potential. Continue nurturing and address any concerns.";
+  return "Early stage. Provide value and educational content.";
+}
+
+export function deduplicateTags(existingTags: string[], newTags: string[]): string[] {
+  return [...new Set([...existingTags, ...newTags])];
+}
+
 export async function runQualifierAgent({
   messages,
   companyId,
@@ -55,18 +90,7 @@ ${prospectContext ? `\nProspect context:\n${prospectContext}` : ""}`,
             .describe("When they need a solution"),
         }),
         execute: async ({ budget, authority, need, timeline }) => {
-          const scores: Record<string, number> = {
-            enterprise: 30, mid_market: 20, smb: 10, unknown: 5,
-            decision_maker: 25, influencer: 15, user: 10,
-            critical: 25, nice_to_have: 15, exploring: 5,
-            immediate: 20, this_quarter: 15, this_year: 10, no_timeline: 5,
-          };
-
-          const score =
-            (scores[budget] || 5) +
-            (scores[authority] || 5) +
-            (scores[need] || 5) +
-            (scores[timeline] || 5);
+          const score = calculateLeadScore(budget, authority, need, timeline);
 
           if (prospectId) {
             await db
@@ -75,24 +99,12 @@ ${prospectContext ? `\nProspect context:\n${prospectContext}` : ""}`,
               .where(eq(prospects.id, prospectId));
           }
 
-          const tier =
-            score >= 80
-              ? "hot"
-              : score >= 50
-                ? "warm"
-                : score >= 30
-                  ? "cool"
-                  : "cold";
+          const tier = getTier(score);
 
           return {
             score,
             tier,
-            recommendation:
-              tier === "hot"
-                ? "High-value lead! Suggest booking a demo immediately."
-                : tier === "warm"
-                  ? "Good potential. Continue nurturing and address any concerns."
-                  : "Early stage. Provide value and educational content.",
+            recommendation: getRecommendation(tier),
           };
         },
       }),
@@ -127,7 +139,7 @@ ${prospectContext ? `\nProspect context:\n${prospectContext}` : ""}`,
               .limit(1);
 
             const existingTags = (prospect[0]?.tags as string[]) || [];
-            const newTags = [...new Set([...existingTags, ...tags])];
+            const newTags = deduplicateTags(existingTags, tags);
 
             await db
               .update(prospects)

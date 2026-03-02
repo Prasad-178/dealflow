@@ -3,6 +3,30 @@ import { memories } from "@/lib/db/schema";
 import { generateEmbedding } from "@/lib/ai/embedding";
 import { cosineDistance, desc, sql, eq } from "drizzle-orm";
 
+// --- Extracted pure logic for testability ---
+
+export function formatMemoriesAsContext(
+  memoryList: { fact: string; category: string }[]
+): string {
+  if (memoryList.length === 0) return "";
+
+  const grouped: Record<string, string[]> = {};
+  for (const mem of memoryList) {
+    if (!grouped[mem.category]) grouped[mem.category] = [];
+    grouped[mem.category].push(mem.fact);
+  }
+
+  let context = "## Known Information About This Prospect\n";
+  for (const [category, facts] of Object.entries(grouped)) {
+    context += `\n### ${category.charAt(0).toUpperCase() + category.slice(1)}\n`;
+    for (const fact of facts) {
+      context += `- ${fact}\n`;
+    }
+  }
+
+  return context;
+}
+
 export async function retrieveMemories(
   prospectId: string,
   currentQuery?: string,
@@ -40,22 +64,5 @@ export async function retrieveMemories(
       .limit(limit);
   }
 
-  if (relevantMemories.length === 0) return "";
-
-  // Format for injection
-  const grouped: Record<string, string[]> = {};
-  for (const mem of relevantMemories) {
-    if (!grouped[mem.category]) grouped[mem.category] = [];
-    grouped[mem.category].push(mem.fact);
-  }
-
-  let context = "## Known Information About This Prospect\n";
-  for (const [category, facts] of Object.entries(grouped)) {
-    context += `\n### ${category.charAt(0).toUpperCase() + category.slice(1)}\n`;
-    for (const fact of facts) {
-      context += `- ${fact}\n`;
-    }
-  }
-
-  return context;
+  return formatMemoriesAsContext(relevantMemories);
 }
