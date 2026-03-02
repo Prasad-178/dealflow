@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { pendingApprovals, meetings, companies } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { addDays, format, setHours, setMinutes } from "date-fns";
+import { getAvailableSlots } from "@/lib/integrations/calendar";
 
 // --- Extracted pure logic for testability ---
 
@@ -82,12 +83,20 @@ ${prospectContext ? `\nProspect context:\n${prospectContext}` : ""}`,
             .describe("Meeting duration in minutes"),
         }),
         execute: async ({ preferredDate, duration = "30" }) => {
-          // Simulate availability - in production, integrate with calendar API
           const baseDate = preferredDate
             ? new Date(preferredDate)
             : addDays(new Date(), 1);
 
-          const slots = generateAvailableSlots(baseDate);
+          // Try real Google Calendar, fall back to generated slots
+          let slots;
+          try {
+            slots = await getAvailableSlots({
+              startDate: baseDate,
+              durationMinutes: parseInt(duration),
+            });
+          } catch {
+            slots = generateAvailableSlots(baseDate);
+          }
 
           return {
             slots: slots.filter((s) => s.available),
