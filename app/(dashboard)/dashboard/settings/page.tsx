@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -11,16 +11,42 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Shield, DollarSign, Users, AlertTriangle, Plug, Mail, MessageSquare, Send, Calendar } from "lucide-react";
+import {
+  Shield,
+  DollarSign,
+  Users,
+  Plug,
+  Mail,
+  MessageSquare,
+  Send,
+  Calendar,
+  CheckCircle,
+} from "lucide-react";
 
 export default function SettingsPage() {
   const [maxDiscount, setMaxDiscount] = useState("25");
-  const [blockedTopics, setBlockedTopics] = useState([
-    "Internal salary information",
-    "Unreleased features not in roadmap",
-    "Competitor disparagement",
-  ]);
+  const [blockedTopics, setBlockedTopics] = useState<string[]>([]);
   const [newTopic, setNewTopic] = useState("");
+  const [requireApprovalForProposals, setRequireApprovalForProposals] = useState(true);
+  const [requireApprovalForMeetings, setRequireApprovalForMeetings] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then((r) => r.json())
+      .then((config) => {
+        if (config && !config.error) {
+          setBlockedTopics(config.blockedTopics || []);
+          setMaxDiscount(String(config.maxDiscountPercent || 25));
+          setRequireApprovalForProposals(config.requireApprovalForProposals ?? true);
+          setRequireApprovalForMeetings(config.requireApprovalForMeetings ?? true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   function addTopic() {
     if (newTopic.trim()) {
@@ -33,7 +59,42 @@ export default function SettingsPage() {
     setBlockedTopics((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function handleSave() {
+    setSaving(true);
+    setFeedback(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          blockedTopics,
+          maxDiscountPercent: parseInt(maxDiscount) || 25,
+          requireApprovalForProposals,
+          requireApprovalForMeetings,
+        }),
+      });
+      if (res.ok) {
+        setFeedback({ type: "success", message: "Settings saved successfully" });
+      } else {
+        setFeedback({ type: "error", message: "Failed to save settings" });
+      }
+    } catch {
+      setFeedback({ type: "error", message: "Failed to save settings" });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setFeedback(null), 3000);
+    }
+  }
+
   const discountNum = parseInt(maxDiscount) || 25;
+
+  if (loading) {
+    return (
+      <div className="p-8 max-w-4xl">
+        <p className="text-muted-foreground">Loading settings...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-4xl">
@@ -43,6 +104,19 @@ export default function SettingsPage() {
           Configure guardrails, pricing rules, and agent behavior
         </p>
       </div>
+
+      {feedback && (
+        <div
+          className={`mb-6 p-3 rounded-lg text-sm ${
+            feedback.type === "success"
+              ? "bg-green-500/10 text-green-400"
+              : "bg-destructive/10 text-destructive"
+          }`}
+        >
+          {feedback.type === "success" && <CheckCircle className="inline h-4 w-4 mr-2" />}
+          {feedback.message}
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Guardrail Settings */}
@@ -125,7 +199,6 @@ export default function SettingsPage() {
                 <span className="text-sm text-muted-foreground">%</span>
               </div>
             </div>
-            {/* Discount progress bar */}
             <div className="space-y-2 pt-2">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
@@ -134,18 +207,30 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-yellow-500" />
-                  <span className="text-sm">11-{maxDiscount}%: Requires approval</span>
+                  <span className="text-sm">
+                    11-{maxDiscount}%: Requires approval
+                  </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="h-3 w-3 rounded-full bg-red-500" />
-                  <span className="text-sm">{">"}
-                    {maxDiscount}%: Blocked</span>
+                  <span className="text-sm">
+                    {">"}{maxDiscount}%: Blocked
+                  </span>
                 </div>
               </div>
               <div className="h-2 rounded-full bg-muted overflow-hidden flex">
-                <div className="bg-green-500 h-full" style={{ width: `${(10 / 50) * 100}%` }} />
-                <div className="bg-yellow-500 h-full" style={{ width: `${((discountNum - 10) / 50) * 100}%` }} />
-                <div className="bg-red-500 h-full" style={{ width: `${((50 - discountNum) / 50) * 100}%` }} />
+                <div
+                  className="bg-green-500 h-full"
+                  style={{ width: `${(10 / 50) * 100}%` }}
+                />
+                <div
+                  className="bg-yellow-500 h-full"
+                  style={{ width: `${((discountNum - 10) / 50) * 100}%` }}
+                />
+                <div
+                  className="bg-red-500 h-full"
+                  style={{ width: `${((50 - discountNum) / 50) * 100}%` }}
+                />
               </div>
             </div>
           </CardContent>
@@ -168,21 +253,16 @@ export default function SettingsPage() {
                 {
                   action: "Send Proposal",
                   description: "Sending pricing proposals to prospects",
-                  required: true,
+                  required: requireApprovalForProposals,
                 },
                 {
                   action: "Book Meeting",
                   description: "Scheduling demos and meetings",
-                  required: true,
+                  required: requireApprovalForMeetings,
                 },
                 {
                   action: "Apply Large Discount",
                   description: "Discounts exceeding 10%",
-                  required: true,
-                },
-                {
-                  action: "Escalate to Sales Team",
-                  description: "Transferring conversation to a human",
                   required: true,
                 },
                 {
@@ -232,26 +312,35 @@ export default function SettingsPage() {
                 {
                   name: "Email (Resend)",
                   icon: Mail,
-                  configured: !!(process.env.NEXT_PUBLIC_RESEND_CONFIGURED === "true"),
+                  configured: !!(
+                    process.env.NEXT_PUBLIC_RESEND_CONFIGURED === "true"
+                  ),
                   description: "Receive and reply to inbound emails",
                 },
                 {
                   name: "Slack",
                   icon: MessageSquare,
-                  configured: !!(process.env.NEXT_PUBLIC_SLACK_CONFIGURED === "true"),
+                  configured: !!(
+                    process.env.NEXT_PUBLIC_SLACK_CONFIGURED === "true"
+                  ),
                   description: "Respond to Slack messages via Events API",
                 },
                 {
                   name: "Telegram",
                   icon: Send,
-                  configured: !!(process.env.NEXT_PUBLIC_TELEGRAM_CONFIGURED === "true"),
+                  configured: !!(
+                    process.env.NEXT_PUBLIC_TELEGRAM_CONFIGURED === "true"
+                  ),
                   description: "Respond to Telegram bot messages",
                 },
                 {
                   name: "Google Calendar",
                   icon: Calendar,
-                  configured: !!(process.env.NEXT_PUBLIC_CALENDAR_CONFIGURED === "true"),
-                  description: "Real availability checks and meeting creation with Google Meet",
+                  configured: !!(
+                    process.env.NEXT_PUBLIC_CALENDAR_CONFIGURED === "true"
+                  ),
+                  description:
+                    "Real availability checks and meeting creation with Google Meet",
                 },
               ].map((integration) => (
                 <div
@@ -269,7 +358,9 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
-                  <Badge variant={integration.configured ? "success" : "secondary"}>
+                  <Badge
+                    variant={integration.configured ? "default" : "secondary"}
+                  >
                     {integration.configured ? "Connected" : "Not configured"}
                   </Badge>
                 </div>
@@ -279,7 +370,9 @@ export default function SettingsPage() {
         </Card>
 
         <div className="flex justify-end">
-          <Button>Save Settings</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
         </div>
       </div>
     </div>
