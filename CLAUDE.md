@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DealFlow AI — a multi-agent platform for autonomous business development. Prospects interact via chat widget, email, Slack, or Telegram. A supervisor agent classifies intent and routes to specialized sub-agents (Knowledge, Qualifier, Deal, Scheduler). All responses pass through a 3-layer guardrail pipeline. Background processing is handled by Inngest.
+DealFlow AI — a multi-agent platform for autonomous business development. Prospects interact via chat widget, email, Slack, or Telegram. A supervisor agent classifies intent and routes to specialized sub-agents (Knowledge, Qualifier, Deal, Scheduler). All responses pass through a 3-layer guardrail pipeline. Background processing is handled by Inngest. Authentication via NextAuth.js v5. Observability via Langfuse + OpenTelemetry.
 
 ## Common Commands
 
@@ -12,6 +12,7 @@ DealFlow AI — a multi-agent platform for autonomous business development. Pros
 # Development
 npm run dev                    # Next.js dev server with Turbopack
 npm run build                  # Production build
+npm run lint                   # ESLint (flat config)
 
 # Database (PostgreSQL 16 + pgvector via Docker on port 5433)
 docker compose up -d           # Start pgvector container
@@ -19,7 +20,7 @@ npm run db:generate            # Generate Drizzle migrations
 npm run db:migrate             # Run migrations
 npm run db:push                # Push schema directly (dev)
 npm run db:studio              # Drizzle Studio GUI
-npm run seed                   # Seed demo company + prospects + docs
+npm run seed                   # Seed demo company + prospects + docs + demo user
 
 # Testing (Vitest)
 npm test                       # Run all tests
@@ -34,11 +35,15 @@ npm run eval                   # LLM-as-Judge against golden dataset
 npm run eval:rag               # RAG Triad metrics
 
 # Other
-npm run lint                   # ESLint
 npm run mcp:server             # Standalone MCP server
 ```
 
 ## Architecture
+
+### Authentication (`lib/auth.ts`)
+NextAuth.js v5 with CredentialsProvider + JWT strategy. Middleware at `middleware.ts` protects `/dashboard/*` and `/api/*` (except webhooks, inngest, auth, chat). Dynamic imports in `authorize()` to avoid Edge Runtime issues with postgres. Session types extended in `next-auth.d.ts` (adds `companyId`, `role`).
+
+Login: `demo@dealflow.ai` / `password123` (seeded via `npm run seed`).
 
 ### Agent Orchestration
 `lib/agents/supervisor.ts` classifies intent via `classifyIntent()` → routes to sub-agent:
@@ -66,10 +71,26 @@ Extract facts via LLM → store with pgvector embeddings → retrieve via semant
 ### Integrations (`lib/integrations/`)
 All optional with graceful fallbacks. Parsers produce `NormalizedMessage`. Outbound dispatch via `sendOutboundMessage()`.
 
+### Telemetry (`instrumentation.ts`)
+Langfuse + OpenTelemetry. `LangfuseSpanProcessor` registered via `NodeTracerProvider`. All AI SDK calls have `experimental_telemetry` with `functionId` labels (e.g., `"supervisor-classify"`, `"qualifier-agent"`, `"guardrail-llm-check"`).
+
+### Rate Limiting (`lib/rate-limit.ts`)
+Sliding-window in-memory rate limiter. Applied to `/api/chat` (20 req/min) and `/api/webhooks/[platform]` (60 req/min).
+
+### Structured Logging (`lib/logger.ts`)
+JSON logger with levels (debug, info, warn, error) and module context. Used across integrations, API routes, and Inngest functions.
+
 ### Key API Routes
-- `POST /api/chat` — Main chat endpoint (supervisor → agents)
-- `POST /api/webhooks/[platform]` — Webhook ingestion (email/slack/telegram/widget/api)
+- `POST /api/chat` — Main chat endpoint (supervisor → agents), rate-limited, auth-protected
+- `POST /api/webhooks/[platform]` — Webhook ingestion (email/slack/telegram/widget/api), rate-limited
+- `GET /api/approvals` — List pending/resolved approvals
 - `PATCH /api/approvals/[id]` — HITL approval (creates calendar event + sends confirmation)
+- `GET /api/dashboard/stats` — Dashboard stats (leads, scores, approvals, meetings)
+- `GET /api/dashboard/leads` — Leads list with search/sort/pagination
+- `GET /api/dashboard/knowledge` — Knowledge entries with type counts
+- `GET/PATCH /api/settings` — Company guardrail config
+- `POST /api/knowledge` — Upload knowledge entry (chunk + embed + store)
+- `DELETE /api/knowledge/[id]` — Remove knowledge entry
 - `POST /api/inngest` — Inngest serve endpoint
 
 ## Code Conventions
@@ -79,9 +100,12 @@ All optional with graceful fallbacks. Parsers produce `NormalizedMessage`. Outbo
 - **LLM outputs:** Zod schemas with `generateObject()` from Vercel AI SDK
 - **Models:** All defined in `lib/ai/models.ts` (gpt-4o-mini for agents, text-embedding-3-small for embeddings)
 - **DB:** Drizzle ORM with lazy Proxy initialization (avoids build-time DATABASE_URL check). Schema in `lib/db/schema/`
+- **Auth:** Session-protected API routes use `session.user.companyId` (typed via `next-auth.d.ts`)
+- **Logging:** `logger.create("module-name")` for structured JSON logging
 - **Testing:** Pure logic extracted from agents for unit testability. Unit tests mock nothing external. Integration/e2e tests need DB + OpenAI.
 - **Commits:** Conventional commits (`feat:`, `fix:`, `docs:`, `chore:`)
+- **CI:** GitHub Actions runs lint + unit tests on PR and push to main
 
 ## Tech Stack
 
-Next.js 15 (App Router) · React 19 · TypeScript (strict) · Tailwind + shadcn/ui · Drizzle ORM · PostgreSQL 16 + pgvector · Vercel AI SDK (`ai@4.1`) · Inngest · Vitest
+Next.js 15 (App Router) · React 19 · TypeScript (strict) · Tailwind + shadcn/ui · Drizzle ORM · PostgreSQL 16 + pgvector · Vercel AI SDK (`ai@4.1`) · NextAuth.js v5 · Langfuse + OpenTelemetry · Inngest · Vitest · GitHub Actions CI

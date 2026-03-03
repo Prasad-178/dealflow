@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { eq } from "drizzle-orm";
 import { hash } from "bcryptjs";
 import * as schema from "../lib/db/schema";
 
@@ -229,20 +230,30 @@ async function seed() {
 
   console.log(`✅ Seeded ${bannedConceptsList.length} banned concepts`);
 
-  // Create demo user
+  // Create demo user (idempotent — skip if already exists)
   const passwordHash = await hash("password123", 12);
-  const [user] = await db
-    .insert(schema.users)
-    .values({
-      email: "demo@dealflow.ai",
-      passwordHash,
-      name: "Demo User",
-      companyId: company.id,
-      role: "admin",
-    })
-    .returning();
+  const existingUsers = await db
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.email, "demo@dealflow.ai"))
+    .limit(1);
 
-  console.log(`✅ Created demo user: ${user.email} (password: password123)`);
+  if (existingUsers.length > 0) {
+    console.log(`✅ Demo user already exists: ${existingUsers[0].email}`);
+  } else {
+    const [user] = await db
+      .insert(schema.users)
+      .values({
+        email: "demo@dealflow.ai",
+        passwordHash,
+        name: "Demo User",
+        companyId: company.id,
+        role: "admin",
+      })
+      .returning();
+
+    console.log(`✅ Created demo user: ${user.email} (password: password123)`);
+  }
 
   console.log("\n🎉 Seed complete!");
   console.log(`\n📋 Company ID: ${company.id}`);

@@ -65,20 +65,56 @@ Inngest Worker (16 checkpointed steps):
   → Emit memory extraction event
 ```
 
+## Authentication
+
+NextAuth.js v5 with credentials provider and JWT strategy. Protected routes:
+- All `/dashboard/*` pages require login
+- All `/api/*` routes (except webhooks, inngest, auth, and chat) are session-protected
+- API routes scope queries to the user's `companyId`
+
+**Demo credentials**: `demo@dealflow.ai` / `password123` (created by `npm run seed`)
+
+## Observability
+
+### Telemetry (Langfuse + OpenTelemetry)
+
+All LLM calls are traced via Langfuse with descriptive `functionId` labels:
+- `supervisor-classify`, `qualifier-agent`, `deal-agent`, `scheduler-agent`, `knowledge-agent`
+- `guardrail-llm-check`, `memory-extract`, `memory-consolidate`
+- `embed-single`, `embed-batch`
+
+### Structured Logging
+
+JSON-formatted logs with module context across all API routes, integrations, and Inngest functions.
+
+### Rate Limiting
+
+Sliding-window in-memory rate limiter:
+- `/api/chat`: 20 requests/min per IP
+- `/api/webhooks/[platform]`: 60 requests/min per IP
+
+## CI/CD
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs on PRs and pushes to `main`:
+- Checkout → Node.js 20 → `npm ci` → `npm run lint` → `npm run test:unit`
+
 ## Tech Stack
 
 - **Next.js 15** (App Router) + **React 19**
 - **Vercel AI SDK v4** (`ai`, `@ai-sdk/openai`, `@ai-sdk/react`)
+- **NextAuth.js v5** (credentials + JWT)
 - **PostgreSQL 16** + **pgvector** (local Docker)
 - **Drizzle ORM** for type-safe DB
+- **Langfuse** + **OpenTelemetry** for LLM tracing
 - **MCP** (Model Context Protocol) — local server + Slack MCP
 - **Inngest** for background job processing (16-step pipeline)
 - **Resend** for email (inbound/outbound)
 - **Slack Web API** + **Slack MCP** for workspace integration
 - **Telegram Bot API** for messaging
 - **Google Calendar API** for real availability + meeting creation
-- **Vitest** for testing (287 tests)
+- **Vitest** for testing (250 unit tests)
 - **shadcn/ui** + **Tailwind CSS**
+- **GitHub Actions** for CI
 
 ## Quick Start
 
@@ -101,7 +137,7 @@ docker compose up -d
 
 # 3. Create your .env file
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env and add your OPENAI_API_KEY and NEXTAUTH_SECRET
 
 # 4. Push database schema
 npm run db:push
@@ -116,7 +152,7 @@ npm run seed
 npm run dev
 ```
 
-The app runs at `http://localhost:3000`.
+The app runs at `http://localhost:3000`. Login at `/login` with `demo@dealflow.ai` / `password123`.
 
 ### Database
 
@@ -133,19 +169,31 @@ docker compose down -v  # Stop + delete data
 ```
 app/
   page.tsx                              # Landing page
+  login/page.tsx                        # Login page (NextAuth credentials)
   (dashboard)/dashboard/
-    page.tsx                            # Sales rep dashboard
-    approvals/page.tsx                  # HITL approval queue
-    leads/page.tsx                      # Lead pipeline
-    knowledge/page.tsx                  # Knowledge base management
-    settings/page.tsx                   # Guardrail config
+    page.tsx                            # Sales rep dashboard (real DB data)
+    approvals/page.tsx                  # HITL approval queue (real DB data)
+    leads/page.tsx                      # Lead pipeline (search/sort/pagination)
+    knowledge/page.tsx                  # Knowledge base management (CRUD)
+    settings/page.tsx                   # Guardrail config (persistent)
   (chat)/chat/[companyId]/page.tsx      # Prospect-facing chat widget
   api/
-    chat/route.ts                       # Main chat endpoint (Supervisor → Agents)
-    webhooks/[platform]/route.ts        # Webhook ingestion
+    auth/[...nextauth]/route.ts         # NextAuth API handler
+    chat/route.ts                       # Main chat endpoint (auth + rate limit)
+    webhooks/[platform]/route.ts        # Webhook ingestion (rate limited)
+    approvals/route.ts                  # List approvals
     approvals/[id]/route.ts             # HITL approval API
-    inngest/route.ts                    # Inngest background job serve endpoint
+    dashboard/stats/route.ts            # Dashboard stats
+    dashboard/leads/route.ts            # Leads list with search/sort
+    dashboard/knowledge/route.ts        # Knowledge entries
+    settings/route.ts                   # Guardrail config GET/PATCH
+    knowledge/route.ts                  # Knowledge upload (chunk + embed)
+    knowledge/[id]/route.ts             # Knowledge delete
+    inngest/route.ts                    # Inngest serve endpoint
 lib/
+  auth.ts                               # NextAuth config (credentials + JWT)
+  rate-limit.ts                          # Sliding-window rate limiter
+  logger.ts                              # Structured JSON logger
   agents/
     supervisor.ts                       # Intent classification + routing
     qualifier.ts                        # Lead qualification (BANT)
@@ -157,7 +205,7 @@ lib/
     embedding.ts                        # Embedding + chunking utilities
   db/
     index.ts                            # Drizzle client (postgres.js)
-    schema/                             # 10 table schemas with pgvector
+    schema/                             # 11 table schemas with pgvector
   guardrails/
     index.ts                            # 3-layer pipeline orchestrator
     deterministic.ts                    # Regex rules
@@ -178,13 +226,16 @@ lib/
     consolidate.ts                      # LLM judge for contradictions
     retrieve.ts                         # Semantic retrieval + injection
   mcp/
-    server.ts                           # Standalone MCP server
-    client.ts                           # MCP client config
+    server.ts                           # Standalone MCP server (DB-backed)
+    client.ts                           # MCP client (stdio transport)
   inngest/
     client.ts                           # Inngest client
     functions.ts                        # 16-step webhook pipeline + memory extraction
+middleware.ts                            # Auth middleware (protects dashboard + API)
+instrumentation.ts                       # Langfuse + OpenTelemetry setup
+next-auth.d.ts                           # NextAuth session type extensions
 scripts/
-  seed.ts                               # Seed demo data
+  seed.ts                               # Seed demo data (idempotent user creation)
   eval.ts                               # LLM-as-Judge evaluation
   eval-rag.ts                           # RAG Triad evaluation
 evals/
@@ -193,11 +244,13 @@ tests/
   unit/                                 # Unit tests (no external deps)
   integration/                          # Integration tests (DB + OpenAI)
   e2e/                                  # End-to-end flow tests
+.github/
+  workflows/ci.yml                      # GitHub Actions: lint + unit tests
 ```
 
 ## Database Schema
 
-10 tables with pgvector support:
+11 tables with pgvector support:
 
 | Table | Purpose |
 |-------|---------|
@@ -211,6 +264,7 @@ tests/
 | `banned_concepts` | Semantic guardrail embeddings |
 | `message_queue` | Async webhook processing |
 | `meetings` | Scheduled meetings |
+| `users` | Authentication (email, passwordHash, companyId, role) |
 
 ## HITL (Human-in-the-Loop) Workflow
 
@@ -228,12 +282,21 @@ Sales reps review pending approvals at `/dashboard/approvals`. When a meeting is
 
 ## Environment Variables
 
-Only `DATABASE_URL` and `OPENAI_API_KEY` are required. All integrations are optional with graceful fallbacks.
+Only `DATABASE_URL`, `OPENAI_API_KEY`, and `NEXTAUTH_SECRET` are required. All integrations are optional with graceful fallbacks.
 
 ```bash
 # Required
 DATABASE_URL=postgresql://dealflow:dealflow@localhost:5433/dealflow
 OPENAI_API_KEY=sk-...
+NEXTAUTH_SECRET=your-secret-key-here
+
+# Auth — optional
+NEXTAUTH_URL=http://localhost:3000
+
+# Telemetry (Langfuse) — optional
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_BASEURL=https://cloud.langfuse.com
 
 # Email (Resend) — optional
 RESEND_API_KEY=re_...
@@ -278,7 +341,7 @@ npm run test:e2e
 OPENAI_API_KEY=sk-... npm run test:integration
 ```
 
-### Test Coverage — 287 tests across 33 files
+### Test Coverage — 250 unit tests across 26 files
 
 | Category | Count | What's Tested |
 |----------|-------|---------------|
@@ -304,7 +367,7 @@ The golden dataset at `evals/golden-dataset.json` covers: product questions, pri
 
 ## MCP Server
 
-Standalone MCP server exposing company data:
+Standalone MCP server exposing company data (DB-backed with hardcoded fallback):
 
 ```bash
 npm run mcp:server
@@ -329,11 +392,12 @@ npm run mcp:server
 |---------|-------------|
 | `npm run dev` | Start dev server (Turbopack) |
 | `npm run build` | Production build |
+| `npm run lint` | ESLint (flat config) |
 | `npm run db:push` | Push schema to DB |
 | `npm run db:studio` | Open Drizzle Studio |
 | `npm run db:generate` | Generate migrations |
 | `npm run db:migrate` | Run migrations |
-| `npm run seed` | Seed demo data |
+| `npm run seed` | Seed demo data + user |
 | `npm run test` | Run all tests |
 | `npm run test:unit` | Run unit tests only |
 | `npm run test:integration` | Run integration tests |

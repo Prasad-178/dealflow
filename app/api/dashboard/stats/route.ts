@@ -16,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const companyId = (session.user as any).companyId;
+  const companyId = session.user.companyId;
 
   const [leadCount] = await db
     .select({ count: sql<number>`count(*)::int` })

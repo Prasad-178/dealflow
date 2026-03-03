@@ -13,7 +13,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const companyId = (session.user as any).companyId;
+  const companyId = session.user.companyId;
   const { id } = await params;
 
   const [deleted] = await db

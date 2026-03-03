@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Clock, Eye, Video } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Eye, Video, Loader2 } from "lucide-react";
 
 type Approval = {
   id: string;
@@ -19,69 +19,40 @@ type Approval = {
   status: "pending" | "approved" | "denied";
   toolInput: Record<string, unknown>;
   createdAt: string;
-  context: string;
+  conversationId: string;
+  prospectName: string | null;
+  prospectCompany: string | null;
+  reviewerNote: string | null;
+  reviewedAt: string | null;
 };
 
-const mockApprovals: Approval[] = [
-  {
-    id: "1",
-    toolName: "sendProposal",
-    agentType: "deal",
-    status: "pending",
-    toolInput: {
-      prospectName: "Alex Rivera",
-      selectedTier: "Professional",
-      discountPercent: 15,
-      notes: "Multi-year commitment, switching from competitor",
-    },
-    createdAt: new Date().toISOString(),
-    context:
-      "Prospect is VP of Sales at 200-person company. Expressed strong interest in Professional tier but requested 15% discount for annual commitment.",
-  },
-  {
-    id: "2",
-    toolName: "bookMeeting",
-    agentType: "scheduler",
-    status: "pending",
-    toolInput: {
-      date: "2026-03-05",
-      time: "2:00 PM ET",
-      duration: "30",
-      meetingType: "demo",
-      prospectName: "Jordan Lee",
-      prospectEmail: "jordan@financehub.com",
-    },
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    context:
-      "Prospect from FinanceHub wants to see a live demo. Team of 20 sales reps. Currently evaluating 3 solutions.",
-  },
-  {
-    id: "3",
-    toolName: "applyDiscount",
-    agentType: "deal",
-    status: "approved",
-    toolInput: {
-      discountPercent: 20,
-      reason: "Enterprise deal, 3-year commitment",
-      tier: "Enterprise",
-    },
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    context: "Large enterprise prospect committing to 3-year deal worth $14,400/yr.",
-  },
-];
-
 export default function ApprovalsPage() {
-  const [approvals, setApprovals] = useState(mockApprovals);
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const [meetLinks, setMeetLinks] = useState<Record<string, string>>({});
 
+  function fetchApprovals() {
+    setLoading(true);
+    fetch("/api/approvals")
+      .then((r) => r.json())
+      .then((data) => {
+        setApprovals(data.approvals || []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    fetchApprovals();
+  }, []);
+
   async function handleApproval(id: string, status: "approved" | "denied") {
+    // Optimistic update
     setApprovals((prev) =>
       prev.map((a) => (a.id === id ? { ...a, status } : a))
     );
 
-    // Call API and capture meet link if returned
     try {
       const res = await fetch(`/api/approvals/${id}`, {
         method: "PATCH",
@@ -93,12 +64,30 @@ export default function ApprovalsPage() {
         setMeetLinks((prev) => ({ ...prev, [id]: data.meetingLink }));
       }
     } catch {
-      // UI already updated optimistically
+      // Revert on error
+      fetchApprovals();
     }
   }
 
   const pending = approvals.filter((a) => a.status === "pending");
   const resolved = approvals.filter((a) => a.status !== "pending");
+
+  const toolLabel = (name: string) => {
+    switch (name) {
+      case "sendProposal": return "Send Proposal";
+      case "bookMeeting": return "Book Meeting";
+      case "applyDiscount": return "Apply Discount";
+      default: return name;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-8">
@@ -130,20 +119,23 @@ export default function ApprovalsPage() {
                     <div className="flex items-center gap-3">
                       <Badge variant="warning">{approval.agentType}</Badge>
                       <CardTitle className="text-lg">
-                        {approval.toolName === "sendProposal"
-                          ? "Send Proposal"
-                          : approval.toolName === "bookMeeting"
-                            ? "Book Meeting"
-                            : approval.toolName === "applyDiscount"
-                              ? "Apply Discount"
-                              : approval.toolName}
+                        {toolLabel(approval.toolName)}
                       </CardTitle>
                     </div>
                     <span className="text-sm text-muted-foreground">
                       {new Date(approval.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <CardDescription>{approval.context}</CardDescription>
+                  <CardDescription>
+                    {approval.prospectName && (
+                      <span>
+                        {approval.prospectName}
+                        {approval.prospectCompany && ` at ${approval.prospectCompany}`}
+                        {" — "}
+                      </span>
+                    )}
+                    {approval.toolName} request from {approval.agentType} agent
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="bg-muted rounded-lg p-4 mb-4 font-mono text-sm">
@@ -175,15 +167,18 @@ export default function ApprovalsPage() {
                       }
                     >
                       <Eye className="h-4 w-4 mr-2" />
-                      Full Context
+                      Details
                     </Button>
                   </div>
                   {expandedId === approval.id && (
-                    <div className="mt-4 p-4 bg-muted border border-border/50 rounded-lg">
-                      <h4 className="font-medium mb-2">Full Conversation Context</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {approval.context}
-                      </p>
+                    <div className="mt-4 p-4 bg-muted border border-border/50 rounded-lg text-sm space-y-1">
+                      <p><strong>Conversation:</strong> {approval.conversationId}</p>
+                      {approval.prospectName && (
+                        <p><strong>Prospect:</strong> {approval.prospectName}</p>
+                      )}
+                      {approval.prospectCompany && (
+                        <p><strong>Company:</strong> {approval.prospectCompany}</p>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -199,48 +194,53 @@ export default function ApprovalsPage() {
           <CheckCircle className="h-5 w-5 text-green-500" />
           Resolved ({resolved.length})
         </h2>
-        <div className="space-y-3">
-          {resolved.map((approval) => (
-            <Card key={approval.id} className="opacity-75">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Badge
-                      variant={
-                        approval.status === "approved" ? "success" : "destructive"
-                      }
-                    >
-                      {approval.status}
-                    </Badge>
-                    <span className="font-medium">{approval.toolName}</span>
+        {resolved.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No resolved approvals yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {resolved.map((approval) => (
+              <Card key={approval.id} className="opacity-75">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge
+                        variant={
+                          approval.status === "approved" ? "success" : "destructive"
+                        }
+                      >
+                        {approval.status}
+                      </Badge>
+                      <span className="font-medium">{toolLabel(approval.toolName)}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {approval.agentType} agent
+                        {approval.prospectName && ` — ${approval.prospectName}`}
+                      </span>
+                    </div>
                     <span className="text-sm text-muted-foreground">
-                      {approval.agentType} agent
+                      {new Date(approval.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {new Date(approval.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                {approval.status === "approved" &&
-                  approval.toolName === "bookMeeting" &&
-                  meetLinks[approval.id] && (
-                    <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
-                      <Video className="h-4 w-4" />
-                      <span>Calendar event created</span>
-                      <a
-                        href={meetLinks[approval.id]}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline"
-                      >
-                        Join Google Meet
-                      </a>
-                    </div>
-                  )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  {approval.status === "approved" &&
+                    approval.toolName === "bookMeeting" &&
+                    meetLinks[approval.id] && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+                        <Video className="h-4 w-4" />
+                        <span>Calendar event created</span>
+                        <a
+                          href={meetLinks[approval.id]}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="underline"
+                        >
+                          Join Google Meet
+                        </a>
+                      </div>
+                    )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

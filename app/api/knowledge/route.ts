@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const companyId = (session.user as any).companyId;
+  const companyId = session.user.companyId;
   const body = await request.json();
   const { content, sourceType, sourceId } = body;
 

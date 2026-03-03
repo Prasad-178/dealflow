@@ -23,6 +23,9 @@ import { sendOutboundMessage } from "@/lib/integrations/outbound";
 import type { NormalizedMessage, Platform } from "@/lib/integrations/types";
 import type { AgentType } from "@/lib/agents/supervisor";
 import { v4 as uuidv4 } from "uuid";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("inngest");
 
 function parsePayload(
   platform: string,
@@ -105,6 +108,7 @@ export const processWebhookMessage = inngest.createFunction(
   { event: "webhook/message.received" },
   async ({ event, step }) => {
     const { messageQueueId, platform } = event.data;
+    log.info("Processing webhook message", { messageQueueId, platform });
 
     // Step 1: Mark as processing
     await step.run("mark-processing", async () => {
@@ -125,6 +129,7 @@ export const processWebhookMessage = inngest.createFunction(
     });
 
     if (!queueItem) {
+      log.error("Queue item not found", { messageQueueId });
       throw new Error("Queue item not found");
     }
 
@@ -140,6 +145,7 @@ export const processWebhookMessage = inngest.createFunction(
           .set({ status: "completed", processedAt: new Date() })
           .where(eq(messageQueue.id, messageQueueId));
       });
+      log.warn("No parseable content, skipping", { messageQueueId, platform });
       return { success: true, skipped: true, reason: "No parseable content" };
     }
 
@@ -225,7 +231,7 @@ export const processWebhookMessage = inngest.createFunction(
     });
 
     if (!inputCheck.passed) {
-      // Send fallback response and exit
+      log.warn("Input guardrail blocked message", { messageQueueId, violation: inputCheck.violation });
       const fallbackText = inputCheck.fallbackResponse || "I can help you with that. Could you rephrase?";
 
       await step.run("send-fallback", async () => {
@@ -260,6 +266,8 @@ export const processWebhookMessage = inngest.createFunction(
       return classifyIntent(historyMessages);
     });
 
+    log.info("Intent classified", { agent: classification.agent, intent: classification.intent.intent });
+
     // Step 11: Run agent
     const agentResult = await step.run("run-agent", async () => {
       return runAgent(classification.agent, {
@@ -275,6 +283,10 @@ export const processWebhookMessage = inngest.createFunction(
     const outputCheck = await step.run("output-guardrails", async () => {
       return runGuardrails(agentResult.response, companyId, "output");
     });
+
+    if (!outputCheck.passed) {
+      log.warn("Output guardrail blocked response", { messageQueueId, violation: outputCheck.violation });
+    }
 
     const finalResponse = outputCheck.passed
       ? agentResult.response
@@ -333,6 +345,13 @@ export const processWebhookMessage = inngest.createFunction(
         });
     });
 
+    log.info("Webhook message processed", {
+      conversationId,
+      prospectId,
+      agentType: classification.agent,
+      intent: classification.intent.intent,
+    });
+
     return {
       success: true,
       conversationId,
@@ -349,6 +368,7 @@ export const extractMemories = inngest.createFunction(
   { event: "conversation/completed" },
   async ({ event, step }) => {
     const { conversationId, prospectId } = event.data;
+    log.info("Extracting memories", { conversationId, prospectId });
 
     // Get conversation messages
     const conversationMessages = await step.run("get-messages", async () => {
@@ -359,7 +379,10 @@ export const extractMemories = inngest.createFunction(
         .orderBy(messages.orderIndex);
     });
 
-    if (conversationMessages.length === 0) return { facts: [] };
+    if (conversationMessages.length === 0) {
+      log.info("No messages to extract from", { conversationId });
+      return { facts: [] };
+    }
 
     // Extract facts
     const facts = await step.run("extract-facts", async () => {
@@ -374,6 +397,8 @@ export const extractMemories = inngest.createFunction(
     await step.run("consolidate", async () => {
       await consolidateMemories(prospectId, facts);
     });
+
+    log.info("Memory extraction complete", { conversationId, factsCount: facts.length });
 
     return { facts: facts.length };
   }

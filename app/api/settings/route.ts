@@ -10,7 +10,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const companyId = (session.user as any).companyId;
+  const companyId = session.user.companyId;
 
   const [company] = await db
     .select({ guardrailConfig: companies.guardrailConfig })
@@ -31,7 +31,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const companyId = (session.user as any).companyId;
+  const companyId = session.user.companyId;
   const body = await request.json();
 
   const { blockedTopics, maxDiscountPercent, requireApprovalForProposals, requireApprovalForMeetings } = body;

@@ -11,6 +11,14 @@
     4. Inngest worker runs the full agent pipeline (16 checkpointed steps).
     5. Send outbound reply on the originating platform via the outbound dispatcher.
 
+### Rate Limiting
+
+Webhooks and chat endpoints are protected by a sliding-window in-memory rate limiter (`lib/rate-limit.ts`):
+- `/api/chat`: 20 requests/min per IP
+- `/api/webhooks/[platform]`: 60 requests/min per IP
+
+Returns HTTP 429 with `Retry-After` header when exceeded.
+
 ### Supported Platforms
 
 | Platform | Inbound | Outbound | Verification |
@@ -20,6 +28,13 @@
 | **Telegram** (Bot API) | Webhook → `parseTelegramPayload` | `sendTelegramMessage` via fetch | Secret token header verification |
 | **Widget** | Direct POST | Inline response | None (same-origin) |
 | **API** | Direct POST | Inline response | None (caller responsibility) |
+
+### Webhook Payload Validation
+
+Widget and API parsers validate incoming payloads:
+- Require `text` or `message` field with string content
+- Validate field types before processing
+- Invalid payloads return descriptive error messages
 
 ### Slack MCP Integration
 
@@ -76,7 +91,8 @@ All platform parsers produce a `NormalizedMessage`:
 
 * **Native Tool Calling (Function Calling):** Passing strict JSON schemas to the LLM so it outputs structured data (e.g., `{"tool": "search", "args": {"query": "pricing"}}`) instead of raw text.
 * **Model Context Protocol (MCP):** The "USB-C for AI." An open standard separating the AI Client from the Tool Server, allowing agents to dynamically connect to data sources (like Slack or company data) without custom API wrappers.
-    - **Local MCP Server** (`lib/mcp/server.ts`): Serves company products, docs, case studies, and team data via stdio transport.
+    - **Local MCP Server** (`lib/mcp/server.ts`): Serves company products, docs, case studies, and team data via stdio transport. DB-backed with hardcoded fallback.
+    - **MCP Client** (`lib/mcp/client.ts`): Uses `experimental_createMCPClient` from Vercel AI SDK with `Experimental_StdioMCPTransport`. Singleton pattern.
     - **Slack MCP Server** (`lib/integrations/slack-mcp.ts`): Remote MCP server at `mcp.slack.com/mcp` for workspace search and messaging via Streamable HTTP.
 * **Memory Structure:** Tool calls use dedicated message roles (`user`, `assistant` with `tool_calls`, and `tool` for the results).
 
@@ -131,7 +147,20 @@ All platform parsers produce a `NormalizedMessage`:
 
 ---
 
-## Module 8: Integration Layer
+## Module 8: Authentication & Authorization
+
+### NextAuth.js v5
+
+* **Provider:** CredentialsProvider with bcryptjs password hashing
+* **Strategy:** JWT (stateless sessions)
+* **Session Extension:** Custom `next-auth.d.ts` adds `companyId` and `role` to session user type
+* **Edge Compatibility:** Dynamic imports in `authorize()` to avoid Edge Runtime issues with postgres
+* **Middleware:** `middleware.ts` protects all `/dashboard/*` and `/api/*` routes, allows public routes (webhooks, inngest, auth, chat, static assets)
+* **API Route Pattern:** All dashboard/settings/knowledge API routes check `session.user.companyId` for data scoping
+
+---
+
+## Module 9: Integration Layer
 
 ### Google Calendar Integration
 
@@ -156,7 +185,35 @@ When a `bookMeeting` approval is approved via `PATCH /api/approvals/[id]`:
 
 ---
 
-## Module 9: Background Processing (Inngest)
+## Module 10: Observability & Operations
+
+### Telemetry (Langfuse + OpenTelemetry)
+
+* **Setup:** `instrumentation.ts` registers `LangfuseSpanProcessor` via `NodeTracerProvider` (Node.js runtime only)
+* **Trace Labels:** All AI SDK calls use `experimental_telemetry` with descriptive `functionId`:
+    - Agents: `supervisor-classify`, `qualifier-agent`, `deal-agent`, `scheduler-agent`, `knowledge-agent`
+    - Guardrails: `guardrail-llm-check`
+    - Memory: `memory-extract`, `memory-consolidate`
+    - Embeddings: `embed-single`, `embed-batch`
+
+### Structured Logging
+
+* **Logger:** `lib/logger.ts` — `logger.create("module-name")` returns `{ debug, info, warn, error }`
+* **Format:** JSON with `{ timestamp, level, module, message, ...data }`
+* **Used by:** All integration modules, API routes, Inngest functions
+
+### Rate Limiting
+
+* **Implementation:** `lib/rate-limit.ts` — sliding-window in-memory rate limiter (Map-based, auto-cleanup via `setInterval`)
+* **Returns:** `{ success, remaining, reset }`
+
+### CI/CD
+
+* **GitHub Actions:** `.github/workflows/ci.yml` — on PR + push to main: checkout → Node.js 20 → `npm ci` → `npm run lint` → `npm run test:unit`
+
+---
+
+## Module 11: Background Processing (Inngest)
 
 ### `processWebhookMessage` — 16 Checkpointed Steps
 
@@ -194,6 +251,8 @@ User sends message (any platform)
   ↓
 POST /api/webhooks/[platform]
   ↓ verify signature (Slack/Telegram)
+  ↓ rate limit check (60 req/min per IP)
+  ↓ validate payload
   ↓ handle url_verification (Slack)
   ↓
 Insert into message_queue (status: pending)
@@ -201,7 +260,7 @@ Insert into message_queue (status: pending)
 Fire Inngest event: webhook/message.received
   ↓ Return 200 OK immediately
   ↓
-Inngest Worker (16 steps):
+Inngest Worker (16 steps, with structured logging):
   ↓ Parse payload → NormalizedMessage
   ↓ Resolve company → Get/create prospect
   ↓ Create conversation → Store user message
@@ -237,6 +296,20 @@ Return { meetingLink, calendarEventCreated }
 
 ---
 
+## Dashboard
+
+All dashboard pages fetch real data from session-protected API routes scoped to the user's `companyId`:
+
+| Page | API Route | Features |
+|------|-----------|----------|
+| **Dashboard** | `GET /api/dashboard/stats` | Lead count, avg score, pending approvals, meetings, recent conversations |
+| **Leads** | `GET /api/dashboard/leads` | Search by name/email/company, sort by score/name/date, pagination |
+| **Approvals** | `GET /api/approvals` | Pending/resolved list, approve/deny with optimistic UI, Meet link display |
+| **Knowledge** | `GET /api/dashboard/knowledge` | Entries by type with counts, upload form (chunk + embed), delete |
+| **Settings** | `GET/PATCH /api/settings` | Guardrail config: blocked topics, max discount, approval toggles |
+
+---
+
 ## Test Coverage
 
 | Category | Count | What's Tested |
@@ -249,7 +322,7 @@ Return { meetingLink, calendarEventCreated }
 | **Unit — Other** | 8+ | Embedding chunking, MCP filters |
 | **Integration** | 14+ | Supervisor classification, database ops, memory extraction |
 | **E2E** | 16+ | Chat flow lifecycle, approval flow, webhook pipeline |
-| **Total** | **287** | Full coverage across all modules |
+| **Total** | **250** | Full coverage across all modules |
 
 ---
 
@@ -260,6 +333,19 @@ Return { meetingLink, calendarEventCreated }
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string (with pgvector) |
 | `OPENAI_API_KEY` | OpenAI API key for LLM and embeddings |
+| `NEXTAUTH_SECRET` | Secret key for NextAuth.js JWT encryption |
+
+### Optional — Auth
+| Variable | Description |
+|----------|-------------|
+| `NEXTAUTH_URL` | Canonical app URL (defaults to `http://localhost:3000`) |
+
+### Optional — Telemetry
+| Variable | Description |
+|----------|-------------|
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key for trace ingestion |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key |
+| `LANGFUSE_BASEURL` | Langfuse instance URL (default: `https://cloud.langfuse.com`) |
 
 ### Optional — Integrations (all have graceful fallbacks)
 | Variable | Description |
