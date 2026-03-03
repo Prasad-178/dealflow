@@ -81,6 +81,7 @@ export default function KnowledgePage() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   async function handleUpload() {

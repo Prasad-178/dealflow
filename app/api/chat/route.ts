@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
         })
       );
 
-      let agentResult = await runAgent(agentType, {
+      let agentResult: { status: string; response: string; toolCalls?: any[] } = await runAgent(agentType, {
         messages: agentMessages,
         companyId,
         conversationId,
