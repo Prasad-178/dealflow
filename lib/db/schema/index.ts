@@ -8,3 +8,4 @@ export * from "./pending-approvals";
 export * from "./banned-concepts";
 export * from "./message-queue";
 export * from "./meetings";
+export * from "./users";

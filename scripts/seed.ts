@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { hash } from "bcryptjs";
 import * as schema from "../lib/db/schema";
 
 async function seed() {
@@ -227,9 +228,26 @@ async function seed() {
   }
 
   console.log(`✅ Seeded ${bannedConceptsList.length} banned concepts`);
+
+  // Create demo user
+  const passwordHash = await hash("password123", 12);
+  const [user] = await db
+    .insert(schema.users)
+    .values({
+      email: "demo@dealflow.ai",
+      passwordHash,
+      name: "Demo User",
+      companyId: company.id,
+      role: "admin",
+    })
+    .returning();
+
+  console.log(`✅ Created demo user: ${user.email} (password: password123)`);
+
   console.log("\n🎉 Seed complete!");
   console.log(`\n📋 Company ID: ${company.id}`);
   console.log(`   Use this ID in chat URL: /chat/${company.id}`);
+  console.log(`   Login: demo@dealflow.ai / password123`);
 
   await client.end();
 }

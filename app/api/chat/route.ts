@@ -14,6 +14,7 @@ import { runSchedulerAgent } from "@/lib/agents/scheduler";
 import { runGuardrails } from "@/lib/guardrails";
 import { retrieveMemories } from "@/lib/memory/retrieve";
 import { inngest } from "@/lib/inngest/client";
+import { auth } from "@/lib/auth";
 import { v4 as uuidv4 } from "uuid";
 
 // In-memory AbortController registry for cancelling in-flight LLM calls
@@ -21,6 +22,10 @@ const activeJobs = new Map<string, AbortController>();
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await request.json();
     const {
       messages,

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -17,7 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="font-sans antialiased selection:bg-primary/30">{children}</body>
+      <body className="font-sans antialiased selection:bg-primary/30">
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }

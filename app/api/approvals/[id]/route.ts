@@ -4,11 +4,17 @@ import { pendingApprovals, meetings } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createCalendarEvent } from "@/lib/integrations/calendar";
 import { sendMeetingConfirmation } from "@/lib/integrations/email";
+import { auth } from "@/lib/auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await params;
 
   const approval = await db
@@ -28,6 +34,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const { id } = await params;
   const body = await request.json();
   const { status, reviewerNote, reviewedBy } = body;
