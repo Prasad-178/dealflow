@@ -79,6 +79,28 @@ export async function POST(
 
     // Email, widget, api — no special verification
     const payload = await request.json();
+
+    // Basic payload validation for widget and api platforms
+    if (platform === "widget" || platform === "api") {
+      if (!payload.text || typeof payload.text !== "string") {
+        return NextResponse.json(
+          { error: "Payload must include a 'text' field of type string" },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Basic email payload validation
+    if (platform === "email") {
+      const text = payload.text || payload.body || payload.html;
+      if (!payload.from || !text) {
+        return NextResponse.json(
+          { error: "Email payload must include 'from' and 'text' (or 'body'/'html') fields" },
+          { status: 400 }
+        );
+      }
+    }
+
     const queueItem = await enqueueAndFire(platform as ValidPlatform, payload);
     return NextResponse.json({ success: true, messageId: queueItem.id });
   } catch (error) {
