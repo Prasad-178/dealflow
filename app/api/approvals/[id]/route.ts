@@ -5,6 +5,9 @@ import { eq } from "drizzle-orm";
 import { createCalendarEvent } from "@/lib/integrations/calendar";
 import { sendMeetingConfirmation } from "@/lib/integrations/email";
 import { auth } from "@/lib/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("api:approvals");
 
 export async function GET(
   request: NextRequest,
@@ -89,7 +92,7 @@ export async function PATCH(
         htmlLink = calendarResult.htmlLink;
       }
     } catch (error) {
-      console.error("[approvals] Calendar event creation failed:", error);
+      log.error("Calendar event creation failed", { error: String(error) });
     }
 
     // Insert meeting record
@@ -117,7 +120,7 @@ export async function PATCH(
           meetingLink,
         });
       } catch (error) {
-        console.error("[approvals] Meeting confirmation email failed:", error);
+        log.error("Meeting confirmation email failed", { error: String(error) });
       }
     }
 

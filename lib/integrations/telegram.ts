@@ -1,4 +1,7 @@
 import type { NormalizedMessage, OutboundMessage } from "./types";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("integrations:telegram");
 
 /**
  * Verify Telegram webhook by checking the secret token header.
@@ -46,7 +49,7 @@ export async function sendTelegramMessage(
 ): Promise<boolean> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
-    console.warn("[telegram] TELEGRAM_BOT_TOKEN not configured, skipping send");
+    log.warn("TELEGRAM_BOT_TOKEN not configured, skipping send");
     return false;
   }
 
@@ -66,7 +69,7 @@ export async function sendTelegramMessage(
 
     if (!response.ok) {
       const error = await response.text();
-      console.error("[telegram] Send failed:", error);
+      log.error("Send failed", { error: String(error) });
       return false;
     }
 

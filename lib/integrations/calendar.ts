@@ -1,5 +1,8 @@
 import { google } from "googleapis";
 import { addDays, format, setHours, setMinutes, isWeekend } from "date-fns";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("integrations:calendar");
 
 function getCalendarClient() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -103,7 +106,7 @@ export async function getAvailableSlots({
       };
     });
   } catch (error) {
-    console.error("[calendar] Freebusy query failed:", error);
+    log.error("Freebusy query failed", { error: String(error) });
     // Fallback: return all as available
     return candidates.map((c) => ({
       date: format(c.date, "yyyy-MM-dd"),
@@ -130,7 +133,7 @@ export async function createCalendarEvent({
 } | null> {
   const calendar = getCalendarClient();
   if (!calendar) {
-    console.warn("[calendar] Google credentials not configured, skipping event creation");
+    log.warn("Google credentials not configured, skipping event creation");
     return null;
   }
 
@@ -160,7 +163,7 @@ export async function createCalendarEvent({
       htmlLink: event.data.htmlLink || undefined,
     };
   } catch (error) {
-    console.error("[calendar] Event creation failed:", error);
+    log.error("Event creation failed", { error: String(error) });
     return null;
   }
 }

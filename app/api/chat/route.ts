@@ -15,7 +15,11 @@ import { runGuardrails } from "@/lib/guardrails";
 import { retrieveMemories } from "@/lib/memory/retrieve";
 import { inngest } from "@/lib/inngest/client";
 import { auth } from "@/lib/auth";
+import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 import { v4 as uuidv4 } from "uuid";
+
+const log = logger.create("api:chat");
 
 // In-memory AbortController registry for cancelling in-flight LLM calls
 const activeJobs = new Map<string, AbortController>();
@@ -25,6 +29,16 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limit: 20 req/min per IP
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const rl = rateLimit(`chat:${ip}`, 20);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((rl.reset - Date.now()) / 1000)) } }
+      );
     }
     const body = await request.json();
     const {
@@ -274,7 +288,7 @@ export async function POST(request: NextRequest) {
       activeJobs.delete(jobId);
     }
   } catch (error) {
-    console.error("Chat API error:", error);
+    log.error("Chat API error", { error: String(error) });
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

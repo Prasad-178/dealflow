@@ -4,6 +4,10 @@ import { messageQueue } from "@/lib/db/schema";
 import { inngest } from "@/lib/inngest/client";
 import { verifySlackSignature } from "@/lib/integrations/slack";
 import { verifyTelegramToken } from "@/lib/integrations/telegram";
+import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("api:webhooks");
 
 const validPlatforms = ["slack", "email", "telegram", "widget", "api"] as const;
 type ValidPlatform = (typeof validPlatforms)[number];
@@ -33,6 +37,16 @@ export async function POST(
   }
 
   try {
+    // Rate limit: 60 req/min per IP
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const rl = rateLimit(`webhook:${ip}`, 60);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429, headers: { "Retry-After": String(Math.ceil((rl.reset - Date.now()) / 1000)) } }
+      );
+    }
+
     // --- Platform-specific signature verification ---
     if (platform === "slack") {
       const { valid, rawBody } = await verifySlackSignature(request);
@@ -68,7 +82,7 @@ export async function POST(
     const queueItem = await enqueueAndFire(platform as ValidPlatform, payload);
     return NextResponse.json({ success: true, messageId: queueItem.id });
   } catch (error) {
-    console.error("Webhook error:", error);
+    log.error("Webhook processing failed", { error: String(error), platform });
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

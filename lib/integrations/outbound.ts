@@ -2,6 +2,9 @@ import type { OutboundMessage } from "./types";
 import { sendEmail } from "./email";
 import { sendSlackMessage } from "./slack";
 import { sendTelegramMessage } from "./telegram";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("integrations:outbound");
 
 /**
  * Route an outbound message to the correct platform sender.
@@ -22,7 +25,7 @@ export async function sendOutboundMessage(
       // These platforms receive responses inline, not via push
       return true;
     default:
-      console.warn(`[outbound] Unknown platform: ${msg.platform}`);
+      log.warn("Unknown platform", { platform: msg.platform });
       return false;
   }
 }

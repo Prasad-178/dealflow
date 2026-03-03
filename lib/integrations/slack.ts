@@ -1,6 +1,9 @@
 import crypto from "crypto";
 import { WebClient } from "@slack/web-api";
 import type { NormalizedMessage, OutboundMessage } from "./types";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("integrations:slack");
 
 function getSlackClient(): WebClient | null {
   const token = process.env.SLACK_BOT_TOKEN;
@@ -85,7 +88,7 @@ export function parseSlackPayload(
 export async function sendSlackMessage(msg: OutboundMessage): Promise<boolean> {
   const client = getSlackClient();
   if (!client) {
-    console.warn("[slack] SLACK_BOT_TOKEN not configured, skipping send");
+    log.warn("SLACK_BOT_TOKEN not configured, skipping send");
     return false;
   }
 
@@ -99,7 +102,7 @@ export async function sendSlackMessage(msg: OutboundMessage): Promise<boolean> {
     });
     return true;
   } catch (error) {
-    console.error("[slack] Send failed:", error);
+    log.error("Send failed", { error: String(error) });
     return false;
   }
 }

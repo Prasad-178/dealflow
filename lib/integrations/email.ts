@@ -1,5 +1,8 @@
 import { Resend } from "resend";
 import type { NormalizedMessage, OutboundMessage } from "./types";
+import { logger } from "@/lib/logger";
+
+const log = logger.create("integrations:email");
 
 function getResend(): Resend | null {
   const apiKey = process.env.RESEND_API_KEY;
@@ -50,7 +53,7 @@ export function parseEmailPayload(
 export async function sendEmail(msg: OutboundMessage): Promise<boolean> {
   const resend = getResend();
   if (!resend) {
-    console.warn("[email] RESEND_API_KEY not configured, skipping send");
+    log.warn("RESEND_API_KEY not configured, skipping send");
     return false;
   }
 
@@ -74,7 +77,7 @@ export async function sendEmail(msg: OutboundMessage): Promise<boolean> {
   });
 
   if (error) {
-    console.error("[email] Send failed:", error);
+    log.error("Send failed", { error: String(error) });
     return false;
   }
 
@@ -96,7 +99,7 @@ export async function sendMeetingConfirmation({
 }): Promise<boolean> {
   const resend = getResend();
   if (!resend) {
-    console.warn("[email] RESEND_API_KEY not configured, skipping meeting confirmation");
+    log.warn("RESEND_API_KEY not configured, skipping meeting confirmation");
     return false;
   }
 
@@ -128,7 +131,7 @@ export async function sendMeetingConfirmation({
   });
 
   if (error) {
-    console.error("[email] Meeting confirmation failed:", error);
+    log.error("Meeting confirmation failed", { error: String(error) });
     return false;
   }
 
