@@ -19,6 +19,7 @@ export async function checkWithLLM(content: string): Promise<LLMCheckResult> {
     const { object } = await generateObject({
       model: guardrailModel,
       schema: checkSchema,
+      experimental_telemetry: { isEnabled: true, functionId: "guardrail-llm-check" },
       prompt: `Review this AI-generated sales response for policy violations:
 
 "${content}"

@@ -57,6 +57,7 @@ export async function runSchedulerAgent({
 }) {
   const result = await generateText({
     model: agentModel,
+    experimental_telemetry: { isEnabled: true, functionId: "scheduler-agent" },
     system: `You are a helpful scheduling assistant for a B2B company.
 Your job is to help prospects book demos and meetings with the sales team.
 

@@ -34,6 +34,7 @@ export async function classifyIntent(
   const { object } = await generateObject({
     model: supervisorModel,
     schema: intentSchema,
+    experimental_telemetry: { isEnabled: true, functionId: "supervisor-classify" },
     system: `You are an intent classifier for a business development AI agent.
 Classify the prospect's latest message into one of these categories:
 - product_question: asking about product features, capabilities, integrations, technical details

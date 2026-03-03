@@ -5,6 +5,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   const { embedding } = await embed({
     model: embeddingModel,
     value: text,
+    experimental_telemetry: { isEnabled: true, functionId: "embed-single" },
   });
   return embedding;
 }
@@ -15,6 +16,7 @@ export async function generateEmbeddings(
   const { embeddings } = await embedMany({
     model: embeddingModel,
     values: texts,
+    experimental_telemetry: { isEnabled: true, functionId: "embed-batch" },
   });
   return embeddings;
 }

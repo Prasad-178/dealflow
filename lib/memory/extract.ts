@@ -34,6 +34,7 @@ export async function extractFacts(
   const { object } = await generateObject({
     model: memoryModel,
     schema: factsSchema,
+    experimental_telemetry: { isEnabled: true, functionId: "memory-extract" },
     system: `You are a fact extraction specialist. Extract specific, actionable facts about the prospect from this conversation.
 
 Focus on:

@@ -73,6 +73,7 @@ export async function runDealAgent({
 
   const result = await generateText({
     model: agentModel,
+    experimental_telemetry: { isEnabled: true, functionId: "deal-agent" },
     system: `You are a skilled sales negotiation specialist.
 Your job is to discuss pricing, handle objections, and close deals.
 

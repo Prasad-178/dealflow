@@ -53,6 +53,7 @@ export async function runQualifierAgent({
 }) {
   const result = await generateText({
     model: agentModel,
+    experimental_telemetry: { isEnabled: true, functionId: "qualifier-agent" },
     system: `You are a friendly, consultative sales qualification specialist.
 Your job is to understand the prospect's needs and qualify them as a lead.
 

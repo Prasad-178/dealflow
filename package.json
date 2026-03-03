@@ -24,7 +24,9 @@
   "dependencies": {
     "@ai-sdk/openai": "^1.1.0",
     "@ai-sdk/react": "^1.1.0",
+    "@langfuse/otel": "^4.6.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "@opentelemetry/sdk-trace-node": "^2.5.1",
     "@radix-ui/react-slot": "^1.2.4",
     "@slack/web-api": "^7.14.1",
     "@types/bcryptjs": "^2.4.6",

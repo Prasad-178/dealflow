@@ -32,6 +32,7 @@ export async function consolidateMemories(
   const { object } = await generateObject({
     model: memoryModel,
     schema: consolidationSchema,
+    experimental_telemetry: { isEnabled: true, functionId: "memory-consolidate" },
     prompt: `Compare these existing facts about a prospect with newly extracted facts.
 Identify any contradictions or outdated information.
 

@@ -17,6 +17,7 @@ export async function runKnowledgeAgent({
 }) {
   const result = await generateText({
     model: agentModel,
+    experimental_telemetry: { isEnabled: true, functionId: "knowledge-agent" },
     system: `You are a knowledgeable product specialist AI assistant for a B2B company.
 Your job is to answer prospect questions about the product using ONLY information from the knowledge base.
 
