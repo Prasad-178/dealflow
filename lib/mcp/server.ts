@@ -32,7 +32,7 @@ const server = new McpServer({
   version: "1.0.0",
 });
 
-// Sample company data (in production, this would query DB)
+// Hardcoded fallback data (used when DB is unavailable)
 const PRODUCTS = [
   {
     id: "prod_1",
@@ -122,15 +122,61 @@ const TEAM = [
   { id: "team_3", name: "Lisa Park", role: "VP Sales", available: false },
 ];
 
+/**
+ * Attempt to load data from DB, fall back to hardcoded data.
+ */
+async function getCompanyFromDB() {
+  try {
+    // Dynamic import to avoid build-time issues when DB is not available
+    const { db } = await import("@/lib/db");
+    const { companies } = await import("@/lib/db/schema");
+    const { sql } = await import("drizzle-orm");
+
+    const [company] = await db
+      .select()
+      .from(companies)
+      .limit(1);
+
+    if (company) return company;
+  } catch {
+    // DB not available — use fallback
+  }
+  return null;
+}
+
+async function getKnowledgeFromDB() {
+  try {
+    const { db } = await import("@/lib/db");
+    const { embeddings } = await import("@/lib/db/schema");
+
+    const entries = await db
+      .select({ content: embeddings.content, sourceType: embeddings.sourceType, sourceId: embeddings.sourceId })
+      .from(embeddings)
+      .limit(50);
+
+    if (entries.length > 0) return entries;
+  } catch {
+    // DB not available — use fallback
+  }
+  return null;
+}
+
 // Tools
 server.tool(
   "getProduct",
   "Get product details, features, and pricing tiers",
   { productId: z.string().optional() },
   async ({ productId }) => {
-    const product = productId
-      ? PRODUCTS.find((p) => p.id === productId)
-      : PRODUCTS[0];
+    const company = await getCompanyFromDB();
+    if (company?.products) {
+      const product = productId
+        ? company.products.find((p) => p.id === productId)
+        : company.products[0];
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(product, null, 2) }],
+      };
+    }
+    const product = getProductById(productId, PRODUCTS);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(product, null, 2) }],
     };
@@ -142,12 +188,17 @@ server.tool(
   "Search product documentation and FAQs",
   { query: z.string() },
   async ({ query }) => {
-    const queryLower = query.toLowerCase();
-    const results = DOCS.filter(
-      (d) =>
-        d.title.toLowerCase().includes(queryLower) ||
-        d.content.toLowerCase().includes(queryLower)
-    );
+    const dbEntries = await getKnowledgeFromDB();
+    if (dbEntries) {
+      const queryLower = query.toLowerCase();
+      const results = dbEntries.filter((e) =>
+        e.content.toLowerCase().includes(queryLower)
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
+      };
+    }
+    const results = searchDocsFilter(query, DOCS);
     return {
       content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
     };
@@ -159,9 +210,25 @@ server.tool(
   "Get case studies by industry",
   { industry: z.string() },
   async ({ industry }) => {
-    const results = CASE_STUDIES.filter((cs) =>
-      cs.industry.toLowerCase().includes(industry.toLowerCase())
-    );
+    const dbEntries = await getKnowledgeFromDB();
+    if (dbEntries) {
+      const results = dbEntries.filter(
+        (e) =>
+          e.sourceType === "case_study" &&
+          e.content.toLowerCase().includes(industry.toLowerCase())
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: results.length > 0
+              ? JSON.stringify(results, null, 2)
+              : "No case studies found for that industry.",
+          },
+        ],
+      };
+    }
+    const results = getCaseStudyFilter(industry, CASE_STUDIES);
     return {
       content: [
         {
@@ -180,8 +247,10 @@ server.tool(
   "Check team availability for meetings",
   {},
   async () => {
+    const company = await getCompanyFromDB();
+    const teamData = company?.team || TEAM;
     return {
-      content: [{ type: "text" as const, text: JSON.stringify(TEAM, null, 2) }],
+      content: [{ type: "text" as const, text: JSON.stringify(teamData, null, 2) }],
     };
   }
 );
@@ -207,23 +276,31 @@ server.tool(
 );
 
 // Resources
-server.resource("products-catalog", "company://products/catalog", async (uri) => ({
-  contents: [{ uri: uri.href, text: JSON.stringify(PRODUCTS, null, 2), mimeType: "application/json" }],
-}));
+server.resource("products-catalog", "company://products/catalog", async (uri) => {
+  const company = await getCompanyFromDB();
+  const products = company?.products || PRODUCTS;
+  return {
+    contents: [{ uri: uri.href, text: JSON.stringify(products, null, 2), mimeType: "application/json" }],
+  };
+});
 
-server.resource("pricing-info", "company://pricing/all", async (uri) => ({
-  contents: [
-    {
-      uri: uri.href,
-      text: JSON.stringify(
-        PRODUCTS.flatMap((p) => p.pricingTiers),
-        null,
-        2
-      ),
-      mimeType: "application/json",
-    },
-  ],
-}));
+server.resource("pricing-info", "company://pricing/all", async (uri) => {
+  const company = await getCompanyFromDB();
+  const products = company?.products || PRODUCTS;
+  return {
+    contents: [
+      {
+        uri: uri.href,
+        text: JSON.stringify(
+          products.flatMap((p) => p.pricingTiers),
+          null,
+          2
+        ),
+        mimeType: "application/json",
+      },
+    ],
+  };
+});
 
 // Start server
 async function main() {
